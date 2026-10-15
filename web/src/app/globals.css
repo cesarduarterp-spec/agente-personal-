@@ -1,0 +1,71 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tokens estilo shadcn/ui (base "stone"). Modo oscuro automático por sistema. */
+:root {
+  --background: oklch(0.985 0.001 106);
+  --foreground: oklch(0.147 0.004 49);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.147 0.004 49);
+  --muted: oklch(0.97 0.001 106);
+  --muted-foreground: oklch(0.553 0.013 58);
+  --primary: oklch(0.216 0.006 56);
+  --primary-foreground: oklch(0.985 0.001 106);
+  --accent: oklch(0.828 0.189 84);
+  --accent-foreground: oklch(0.216 0.006 56);
+  --border: oklch(0.923 0.003 49);
+  --ring: oklch(0.709 0.01 56);
+  --radius: 0.875rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.147 0.004 49);
+    --foreground: oklch(0.985 0.001 106);
+    --card: oklch(0.216 0.006 56);
+    --card-foreground: oklch(0.985 0.001 106);
+    --muted: oklch(0.268 0.007 34);
+    --muted-foreground: oklch(0.709 0.01 56);
+    --primary: oklch(0.985 0.001 106);
+    --primary-foreground: oklch(0.216 0.006 56);
+    --border: oklch(1 0 0 / 10%);
+    --ring: oklch(0.553 0.013 58);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 8px);
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { -webkit-tap-highlight-color: transparent; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    overscroll-behavior-y: none;
+  }
+}
+
+/* Utilidades PWA */
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+@utility pt-safe { padding-top: env(safe-area-inset-top); }
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

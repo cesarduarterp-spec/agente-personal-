@@ -1,0 +1,171 @@
+{
+  "name": "02 · Motor de recordatorios (cada 5 min)",
+  "nodes": [
+    {
+      "id": "4c7cf716-ab31-464e-a2a5-5804b2a4a957",
+      "name": "Cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "01639988-d58a-46fd-a872-4ba11ed1ae44",
+      "name": "Reclamar recordatorios (RPC)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/San_Luis';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\n// ─── fin helpers ───\n\n// Toma (y marca reminder_sent=true de forma atómica) los recordatorios vencidos.\n// Consulta equivalente: status='pendiente' AND reminder_sent=false AND reminder_at <= NOW()\nconst tasks = await rpc('fn_claim_due_reminders', { p_limit: 50 });\nreturn (tasks || []).map((t) => ({ json: t }));\n"
+      },
+      "notes": "Marca reminder_sent=true atómicamente",
+      "notesInFlow": true
+    },
+    {
+      "id": "805a4871-26d3-4e25-a43b-9a1b0ee88903",
+      "name": "Telegram + botones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/San_Luis';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\n// ─── fin helpers ───\n\n// Envía cada recordatorio a Telegram con botones de acción.\n// Si el envío falla, se \"rearma\" el recordatorio para el próximo ciclo.\nconst out = [];\nfor (const { json: t } of $input.all()) {\n  const html =\n    `🔔 <b>Recordatorio</b> ${PRIORITY_ICON[t.priority] || ''}\\n\\n` +\n    `<b>${escHtml(t.title)}</b>\\n` +\n    `${escHtml(t.category)} · vence ${escHtml(fmtLocal(t.due_date))}` +\n    (t.description ? `\\n\\n<i>${escHtml(t.description.slice(0, 600))}</i>` : '');\n  try {\n    await sendTelegram(ENV.TELEGRAM_ALLOWED_CHAT_ID, html, { reply_markup: taskKeyboard(t.id) });\n    out.push({ json: { ...t, telegram_sent: true } });\n  } catch (e) {\n    await http({\n      method: 'PATCH',\n      url: `${SB_URL}/rest/v1/tasks?id=eq.${t.id}`,\n      headers: SB_HEADERS,\n      body: { reminder_sent: false },\n      json: true,\n    }).catch(() => {});\n    out.push({ json: { ...t, telegram_sent: false, error: e.message } });\n  }\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "85da5143-40ca-47c2-a681-8ab2e4898151",
+      "name": "¿Prioridad alta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e27978e5-af09-42ef-a10b-1b29fa49ca7e",
+              "leftValue": "={{ $json.priority }}",
+              "rightValue": "alta",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "df418815-626d-4881-aabe-9f95a5258564",
+      "name": "ntfy · push crítico",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        220
+      ],
+      "parameters": {
+        "options": {},
+        "method": "POST",
+        "url": "={{ $env.NTFY_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.NTFY_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  topic: $env.NTFY_TOPIC,\n  title: '🔴 ' + $json.title,\n  message: $json.category + ' · vence ' + ($json.due_local || 'sin fecha'),\n  priority: 5,\n  tags: ['rotating_light'],\n  click: $env.APP_URL,\n  actions: [{ action: 'view', label: 'Abrir agenda', url: $env.APP_URL }]\n}) }}"
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Reclamar recordatorios (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reclamar recordatorios (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Telegram + botones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram + botones": {
+      "main": [
+        [
+          {
+            "node": "¿Prioridad alta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Prioridad alta?": {
+      "main": [
+        [
+          {
+            "node": "ntfy · push crítico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/San_Luis",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

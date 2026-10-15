@@ -1,0 +1,264 @@
+{
+  "name": "01 · Telegram → Agente Gemini (voz y texto)",
+  "nodes": [
+    {
+      "id": "d30845a0-3c98-42a2-ae8e-1ae144aa93fa",
+      "name": "Telegram Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "3a9ffb62-fa82-4875-a862-7e2148bbc228"
+    },
+    {
+      "id": "c7bf95f1-0056-45e4-a43e-fbdfde688cb8",
+      "name": "Validar y normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/San_Luis';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\n// ─── fin helpers ───\n\n// Valida el webhook de Telegram (secret header + chat autorizado) y normaliza el update.\nconst req = $input.first().json;\nconst headers = req.headers || {};\nconst update = req.body || {};\n\nif (headers['x-telegram-bot-api-secret-token'] !== ENV.TELEGRAM_WEBHOOK_SECRET) {\n  return []; // petición no firmada por Telegram → se descarta en silencio\n}\n\nconst allowed = String(ENV.TELEGRAM_ALLOWED_CHAT_ID);\n\nif (update.callback_query) {\n  const cq = update.callback_query;\n  const chatId = cq.message?.chat?.id;\n  if (String(chatId) !== allowed) return [];\n  const [, action, taskId] = String(cq.data || '').split(':');\n  return [{ json: {\n    kind: 'callback',\n    chat_id: chatId,\n    message_id: cq.message?.message_id,\n    original_text: cq.message?.text || '',\n    callback_id: cq.id,\n    action,\n    task_id: taskId,\n  } }];\n}\n\nconst msg = update.message || update.edited_message;\nif (!msg || String(msg.chat?.id) !== allowed) return [];\n\nconst audio = msg.voice || msg.audio;\nconst base = { chat_id: msg.chat.id, message_id: msg.message_id };\n\n// Feedback inmediato (\"grabando/escribiendo…\") mientras el agente piensa\nawait tg('sendChatAction', { chat_id: msg.chat.id, action: 'typing' }).catch(() => {});\n\nif (audio) {\n  return [{ json: { ...base, kind: 'voice', file_id: audio.file_id,\n    mime_type: audio.mime_type || 'audio/ogg', caption: msg.caption || '' } }];\n}\nif (msg.text) {\n  if (msg.text === '/start') {\n    await sendTelegram(msg.chat.id, '👋 Listo. Mandame una nota de voz o un texto con lo que necesites agendar.');\n    return [];\n  }\n  return [{ json: { ...base, kind: 'text', text: msg.text } }];\n}\nreturn [];\n"
+      },
+      "notes": "Secret header + chat autorizado",
+      "notesInFlow": true
+    },
+    {
+      "id": "776d4dc5-5839-4774-ac96-aa3cf5e14a2d",
+      "name": "Tipo de entrada",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b269377b-e8b7-4a46-a9f4-533d944a281b",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "voice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "voice"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e8ffbe71-79d2-492e-ac63-9d35fcad7203",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d4ce6ecb-8519-4e5b-a005-53667cdfa958",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "callback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "callback"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "74f3731d-eef8-4331-ae36-198be5d1c98e",
+      "name": "Descargar audio (.ogg)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        140
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/San_Luis';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\n// ─── fin helpers ───\n\n// Descarga la nota de voz (.ogg/Opus) desde Telegram y la deja en base64\n// para enviarla como entrada multimodal nativa a Gemini (sin transcripción intermedia).\nconst item = $input.first().json;\n\nconst file = await tg('getFile', { file_id: item.file_id });\nconst filePath = file?.result?.file_path;\nif (!filePath) throw new Error('Telegram no devolvió file_path para la nota de voz');\n\nconst buffer = await http({\n  method: 'GET',\n  url: `https://api.telegram.org/file/bot${ENV.TELEGRAM_BOT_TOKEN}/${filePath}`,\n  encoding: 'arraybuffer',\n  json: false,\n});\n\n// Gemini acepta audio inline hasta ~20 MB por request (una nota de voz pesa KB).\n// (Los task runners de n8n serializan el Buffer al cruzar el proceso: se normaliza.)\nconst toBuffer = (b) => {\n  if (Buffer.isBuffer(b) || b instanceof ArrayBuffer || ArrayBuffer.isView(b)) return Buffer.from(b);\n  if (b && b.type === 'Buffer' && Array.isArray(b.data)) return Buffer.from(b.data);\n  if (b && typeof b === 'object') return Buffer.from(Object.values(b));\n  return Buffer.from(String(b), 'binary');\n};\nconst audioB64 = toBuffer(buffer).toString('base64');\nconst mime = item.mime_type === 'audio/oga' ? 'audio/ogg' : item.mime_type;\n\nreturn [{ json: { ...item, audio_b64: audioB64, mime_type: mime } }];\n"
+      }
+    },
+    {
+      "id": "93af155e-b4c8-42b7-a623-8e40a5377b8f",
+      "name": "Agente Gemini (Function Calling)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        240
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/San_Luis';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\n// ─── fin helpers ───\n\n// Agente Gemini con Function Calling.\n// Entrada: { kind: 'voice'|'text', chat_id, text?, audio_b64?, mime_type? }\n// Bucle: Gemini decide herramientas → se ejecutan contra Supabase (RPC) → se le devuelven\n// los resultados → repite hasta obtener una respuesta final en texto (máx. MAX_TURNS).\nconst TOOLS = [\n  {\n    \"name\": \"create_task\",\n    \"description\": \"Crea UNA tarea nueva en la agenda. Si el usuario dicta varias tareas, llamá a esta función una vez por tarea (en paralelo). Inferí la categoría por el contexto: obra, proveedores, materiales, planos -> #Constructora; viajes, pasajes, hoteles, clientes de turismo -> #AgenciaViajes; automatización, IA, n8n, propuestas de consultoría -> #ConsultoraIA; facultad, cursos, lecturas, exámenes -> #Estudio; todo lo demás -> #Personal.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"title\": {\n          \"type\": \"string\",\n          \"description\": \"Acción clara y concisa empezando con verbo en infinitivo. Ej: 'Llamar a Juan por presupuesto de hormigón'.\"\n        },\n        \"description\": {\n          \"type\": \"string\",\n          \"description\": \"Notas, subtareas (lista con guiones) o resultados de una búsqueda web previa.\"\n        },\n        \"category\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"#Constructora\",\n            \"#AgenciaViajes\",\n            \"#ConsultoraIA\",\n            \"#Estudio\",\n            \"#Personal\"\n          ]\n        },\n        \"priority\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"alta\",\n            \"media\",\n            \"baja\"\n          ],\n          \"description\": \"alta si dice urgente/importante/sí o sí; baja si dice 'cuando pueda'; si no, media.\"\n        },\n        \"due_date\": {\n          \"type\": \"string\",\n          \"description\": \"Fecha y hora de vencimiento/ejecución en ISO 8601 con offset -03:00. Ej: 2026-10-16T10:00:00-03:00. Omitir si no hay fecha.\"\n        },\n        \"reminder_at\": {\n          \"type\": \"string\",\n          \"description\": \"Momento exacto del recordatorio en ISO 8601 -03:00. Si se omite y hay due_date, se usa 15 minutos antes.\"\n        }\n      },\n      \"required\": [\n        \"title\",\n        \"category\",\n        \"priority\"\n      ]\n    }\n  },\n  {\n    \"name\": \"list_tasks\",\n    \"description\": \"Lista tareas de la agenda por rango temporal. Usar para '¿qué tengo hoy?', '¿qué tengo esta semana?', 'qué tengo atrasado', etc.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"range\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"today\",\n            \"tomorrow\",\n            \"week\",\n            \"overdue\",\n            \"all_pending\",\n            \"custom\"\n          ]\n        },\n        \"from\": {\n          \"type\": \"string\",\n          \"description\": \"Solo con range=custom. ISO 8601 -03:00.\"\n        },\n        \"to\": {\n          \"type\": \"string\",\n          \"description\": \"Solo con range=custom. ISO 8601 -03:00 (exclusivo).\"\n        },\n        \"category\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"#Constructora\",\n            \"#AgenciaViajes\",\n            \"#ConsultoraIA\",\n            \"#Estudio\",\n            \"#Personal\"\n          ]\n        },\n        \"include_completed\": {\n          \"type\": \"boolean\",\n          \"description\": \"true para incluir completadas (ej: '¿qué hice hoy?').\"\n        }\n      },\n      \"required\": [\n        \"range\"\n      ]\n    }\n  },\n  {\n    \"name\": \"find_tasks\",\n    \"description\": \"Búsqueda semántica difusa de tareas abiertas por texto (tolera acentos y errores). Usar cuando la tarea mencionada no está en open_tasks del contexto o hay dudas.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"query\": {\n          \"type\": \"string\",\n          \"description\": \"Palabras clave de la tarea. Ej: 'presupuesto hormigón'.\"\n        },\n        \"limit\": {\n          \"type\": \"integer\",\n          \"description\": \"Máximo de resultados (default 5).\"\n        }\n      },\n      \"required\": [\n        \"query\"\n      ]\n    }\n  },\n  {\n    \"name\": \"complete_task\",\n    \"description\": \"Marca una tarea como completada. Preferí pasar task_id tomado de open_tasks (coincidencia semántica hecha por vos). Si no estás seguro, pasá query y el sistema buscará; si responde status=ambiguous, preguntale al usuario cuál de los candidatos es.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"task_id\": {\n          \"type\": \"string\",\n          \"description\": \"UUID de la tarea.\"\n        },\n        \"query\": {\n          \"type\": \"string\",\n          \"description\": \"Texto para buscar la tarea si no tenés el id.\"\n        }\n      }\n    }\n  },\n  {\n    \"name\": \"update_task\",\n    \"description\": \"Modifica campos de una tarea existente (título, descripción, categoría, prioridad, estado, fecha o recordatorio). Para mover fechas con efecto dominó usar reschedule_task.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"task_id\": {\n          \"type\": \"string\"\n        },\n        \"title\": {\n          \"type\": \"string\"\n        },\n        \"description\": {\n          \"type\": \"string\"\n        },\n        \"category\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"#Constructora\",\n            \"#AgenciaViajes\",\n            \"#ConsultoraIA\",\n            \"#Estudio\",\n            \"#Personal\"\n          ]\n        },\n        \"priority\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"alta\",\n            \"media\",\n            \"baja\"\n          ]\n        },\n        \"status\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"pendiente\",\n            \"en_progreso\",\n            \"completada\",\n            \"cancelada\"\n          ]\n        },\n        \"due_date\": {\n          \"type\": \"string\",\n          \"description\": \"ISO 8601 -03:00\"\n        },\n        \"reminder_at\": {\n          \"type\": \"string\",\n          \"description\": \"ISO 8601 -03:00\"\n        }\n      },\n      \"required\": [\n        \"task_id\"\n      ]\n    }\n  },\n  {\n    \"name\": \"reschedule_task\",\n    \"description\": \"Reprograma una tarea a una nueva fecha/hora o la desplaza N minutos. Con cascade=true desplaza el mismo delta a todas las tareas pendientes posteriores del MISMO día (ej: 'me atrasé una hora con la reunión, corré todo lo que sigue').\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"task_id\": {\n          \"type\": \"string\"\n        },\n        \"new_due_date\": {\n          \"type\": \"string\",\n          \"description\": \"Nueva fecha/hora ISO 8601 -03:00. Usar esto O shift_minutes.\"\n        },\n        \"shift_minutes\": {\n          \"type\": \"integer\",\n          \"description\": \"Minutos a desplazar (negativo = adelantar).\"\n        },\n        \"cascade\": {\n          \"type\": \"boolean\",\n          \"description\": \"true para reprogramar en cadena el resto del día.\"\n        }\n      },\n      \"required\": [\n        \"task_id\"\n      ]\n    }\n  },\n  {\n    \"name\": \"cancel_task\",\n    \"description\": \"Cancela una tarea (no se borra; queda con status=cancelada).\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"task_id\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"task_id\"\n      ]\n    }\n  },\n  {\n    \"name\": \"web_search\",\n    \"description\": \"Busca información actual en la web (Google Search grounding) y devuelve un resumen con fuentes. Usar para precios, horarios, normativas, noticias, datos de proveedores, etc. Si attach_to_task_id viene, el resultado se agrega a la descripción de esa tarea.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"query\": {\n          \"type\": \"string\",\n          \"description\": \"Consulta concreta, en español, con contexto geográfico si aplica (Argentina / San Luis).\"\n        },\n        \"attach_to_task_id\": {\n          \"type\": \"string\",\n          \"description\": \"UUID de una tarea a la que adjuntar el resultado.\"\n        }\n      },\n      \"required\": [\n        \"query\"\n      ]\n    }\n  }\n];\nconst SYSTEM_TEMPLATE = \"Sos el asistente ejecutivo personal de {{USER_NAME}}. Trabajás por voz y texto vía Telegram y gestionás su agenda de tareas.\\n\\n# Contexto temporal\\n- Ahora es {{NOW_LOCAL}} ({{WEEKDAY}}), zona horaria America/Argentina/San_Luis (UTC-3, sin horario de verano).\\n- Resolvé siempre fechas relativas (\\\"mañana\\\", \\\"el jueves\\\", \\\"en dos horas\\\", \\\"a la tarde\\\") contra ese momento.\\n- Convenciones: \\\"a la mañana\\\" = 09:00, \\\"al mediodía\\\" = 12:00, \\\"a la tarde\\\" = 16:00, \\\"a la noche\\\" = 20:00.\\n- Toda fecha que envíes a una herramienta va en ISO 8601 con offset -03:00.\\n\\n# Áreas de trabajo (categorías)\\n#Constructora · #AgenciaViajes · #ConsultoraIA · #Estudio · #Personal\\n\\n# Tareas abiertas (para coincidencia semántica)\\nCuando el usuario diga \\\"ya hice X\\\", \\\"listo lo de X\\\", \\\"tachá X\\\", identificá la tarea en esta lista por significado (no por texto exacto) y usá su id. Si hay más de una candidata razonable, preguntá cuál antes de actuar.\\n{{OPEN_TASKS}}\\n\\n# Reglas\\n1. Actuá, no preguntes de más: si la intención es clara, ejecutá la herramienta directamente.\\n2. Un audio puede contener varias instrucciones: ejecutá todas (podés llamar varias herramientas en paralelo).\\n3. Títulos: verbo en infinitivo, concretos, sin la fecha adentro.\\n4. \\\"Reprogramar en cadena\\\" / \\\"correr todo\\\" / \\\"me atrasé\\\" → reschedule_task con cascade=true.\\n5. Si te piden investigar algo para una tarea, usá web_search y guardá el resultado en la descripción.\\n6. Nunca inventes ids. Si no está en la lista, usá find_tasks.\\n\\n# Respuesta final\\n- Español rioplatense, breve, estilo mensaje de chat (máx. ~6 líneas salvo listados).\\n- Confirmá qué hiciste con emojis sobrios: ✅ creada/completada, 📅 fecha, 🔁 reprogramada, 🔎 búsqueda.\\n- Mostrá fechas en formato humano: \\\"jue 16/10 10:00\\\".\\n- Podés usar **negrita** para títulos de tareas. No uses tablas.\\n\";\nconst MAX_TURNS = 6;\n\nconst input = $input.first().json;\nconst chatId = input.chat_id;\n\n// 1) Contexto: hora local, tareas abiertas e historial corto\nconst ctx = await rpc('fn_agent_context', { p_chat_id: chatId });\nconst openTasks = (ctx.open_tasks || [])\n  .map((t) => `- id=${t.id} | ${t.title} | ${t.category} | ${t.priority} | ${t.status} | ${t.due_local || 'sin fecha'}`)\n  .join('\\n') || '(no hay tareas abiertas)';\n\nconst systemText = SYSTEM_TEMPLATE\n  .replace('{{USER_NAME}}', ENV.USER_NAME || 'el usuario')\n  .replace('{{NOW_LOCAL}}', ctx.now_local)\n  .replace('{{WEEKDAY}}', ctx.weekday)\n  .replace('{{OPEN_TASKS}}', openTasks);\n\nconst contents = (ctx.history || []).map((m) => ({ role: m.role, parts: [{ text: m.content }] }));\n\n// 2) Mensaje actual: audio nativo (multimodal) o texto\nconst userParts = input.kind === 'voice'\n  ? [\n      { inlineData: { mimeType: input.mime_type || 'audio/ogg', data: input.audio_b64 } },\n      { text: 'Nota de voz del usuario. Escuchala y ejecutá lo que pide.' + (input.caption ? ` Texto adjunto: ${input.caption}` : '') },\n    ]\n  : [{ text: input.text }];\ncontents.push({ role: 'user', parts: userParts });\n\n// 3) Implementación de cada herramienta\nasync function webSearch({ query, attach_to_task_id }) {\n  const res = await gemini({\n    contents: [{ role: 'user', parts: [{ text:\n      `Investigá y respondé en español, en 5-8 viñetas concretas y verificables: ${query}` }] }],\n    tools: [{ google_search: {} }],\n  });\n  const summary = geminiText(res);\n  const sources = (res?.candidates?.[0]?.groundingMetadata?.groundingChunks || [])\n    .map((c) => c.web).filter(Boolean).slice(0, 5)\n    .map((w) => ({ title: w.title, url: w.uri }));\n\n  if (attach_to_task_id) {\n    const [task] = await http({\n      method: 'GET',\n      url: `${SB_URL}/rest/v1/tasks?id=eq.${attach_to_task_id}&select=description`,\n      headers: SB_HEADERS, json: true,\n    });\n    const block = `🔎 ${query}\\n${summary}\\n` + sources.map((s) => `- ${s.title}: ${s.url}`).join('\\n');\n    await rpc('fn_update_task', {\n      p_task_id: attach_to_task_id,\n      p_patch: { description: [task?.description, block].filter(Boolean).join('\\n\\n') },\n    });\n  }\n  return { summary, sources, attached_to: attach_to_task_id || null };\n}\n\nconst handlers = {\n  create_task: (a) => rpc('fn_create_task', {\n    p_title: a.title, p_description: a.description, p_category: a.category,\n    p_priority: a.priority, p_due_date: a.due_date, p_reminder_at: a.reminder_at, p_source: 'telegram',\n  }),\n  list_tasks: (a) => rpc('fn_list_tasks', {\n    p_range: a.range, p_from: a.from, p_to: a.to, p_category: a.category,\n    p_statuses: a.include_completed ? ['pendiente', 'en_progreso', 'completada'] : undefined,\n  }),\n  find_tasks: (a) => rpc('fn_find_tasks', { p_query: a.query, p_limit: a.limit }),\n  complete_task: (a) => rpc('fn_complete_task', { p_task_id: a.task_id, p_query: a.query, p_by: 'telegram' }),\n  update_task: ({ task_id, ...patch }) => rpc('fn_update_task', { p_task_id: task_id, p_patch: patch, p_by: 'telegram' }),\n  reschedule_task: (a) => rpc('fn_reschedule_task', {\n    p_task_id: a.task_id, p_new_due: a.new_due_date, p_shift_minutes: a.shift_minutes,\n    p_cascade: a.cascade === true ? true : undefined, p_by: 'telegram',\n  }),\n  cancel_task: (a) => rpc('fn_task_action', { p_task_id: a.task_id, p_action: 'cancel', p_by: 'telegram' }),\n  web_search: webSearch,\n};\n\n// 4) Bucle agente\nlet reply = '';\nconst actions = [];\nfor (let turn = 0; turn < MAX_TURNS; turn++) {\n  const res = await gemini({\n    systemInstruction: { parts: [{ text: systemText }] },\n    contents,\n    tools: [{ functionDeclarations: TOOLS }],\n    toolConfig: { functionCallingConfig: { mode: 'AUTO' } },\n    generationConfig: { temperature: 0.3 },\n  });\n\n  const candidate = res?.candidates?.[0];\n  const parts = candidate?.content?.parts || [];\n  const calls = parts.filter((p) => p.functionCall);\n\n  if (calls.length === 0) {\n    reply = geminiText(res);\n    break;\n  }\n\n  // Se reenvía el turno del modelo tal cual (conserva thought signatures de 2.5)\n  contents.push(candidate.content);\n\n  const responses = [];\n  for (const { functionCall } of calls) {\n    const { name, args = {} } = functionCall;\n    let result;\n    try {\n      if (!handlers[name]) throw new Error(`Herramienta desconocida: ${name}`);\n      result = await handlers[name](args);\n    } catch (e) {\n      result = { status: 'error', message: e.message };\n    }\n    actions.push({ name, args, status: result?.status, task_id: result?.task?.id || null });\n    responses.push({ functionResponse: { name, response: { result } } });\n  }\n  contents.push({ role: 'user', parts: responses });\n}\n\nif (!reply) reply = actions.length ? '✅ Hecho.' : 'No pude procesar el pedido, ¿me lo repetís?';\n\n// 5) Memoria corta: guardamos el intercambio (el audio se registra como marcador + acciones)\nconst actionNote = actions.length\n  ? `\\n[acciones: ${actions.map((a) => `${a.name}${a.args.task_id ? '(' + a.args.task_id + ')' : a.args.title ? '(' + a.args.title + ')' : ''}`).join(', ')}]`\n  : '';\nawait rpc('fn_log_message', {\n  p_chat_id: chatId, p_role: 'user',\n  p_content: input.kind === 'voice' ? '[nota de voz]' : input.text,\n}).catch(() => {});\nawait rpc('fn_log_message', { p_chat_id: chatId, p_role: 'model', p_content: reply + actionNote }).catch(() => {});\n\nreturn [{ json: { chat_id: chatId, reply_to: input.message_id, reply, actions } }];\n"
+      },
+      "notes": "Audio nativo + tools → Supabase RPC",
+      "notesInFlow": true
+    },
+    {
+      "id": "d97cd2c0-f530-4cf2-a04c-9285b9d5809a",
+      "name": "Responder en Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        240
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/San_Luis';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\n// ─── fin helpers ───\n\n// Envía la respuesta del agente. Si se creó exactamente una tarea, agrega los botones de acción.\nconst { chat_id, reply_to, reply, actions = [] } = $input.first().json;\n\nconst created = actions.filter((a) => a.name === 'create_task' && a.status === 'created');\nconst extra = { reply_parameters: { message_id: reply_to, allow_sending_without_reply: true } };\n\nif (created.length === 1 && created[0].task_id) {\n  extra.reply_markup = taskKeyboard(created[0].task_id);\n}\n\nawait sendTelegram(chat_id, mdToTgHtml(reply), extra);\nreturn [{ json: { sent: true } }];\n"
+      }
+    },
+    {
+      "id": "d35bea06-89f7-4cd3-a212-1a11fc0f2549",
+      "name": "Acción de botón",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        480
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/San_Luis';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\n// ─── fin helpers ───\n\n// Maneja los botones inline: actualiza la tarea por id y edita el mensaje original.\nconst { chat_id, message_id, callback_id, action, task_id, original_text } = $input.first().json;\n\nconst LABELS = {\n  done: '✅ Completada',\n  snooze_1h: '⏳ Pospuesta 1 hora',\n  tomorrow: '📅 Pasada a mañana',\n};\n\nif (!LABELS[action] || !/^[0-9a-f-]{36}$/i.test(task_id || '')) {\n  await tg('answerCallbackQuery', { callback_query_id: callback_id, text: 'Acción no válida' });\n  return [];\n}\n\nconst res = await rpc('fn_task_action', { p_task_id: task_id, p_action: action, p_by: 'telegram' });\n\nif (res.status !== 'ok') {\n  await tg('answerCallbackQuery', { callback_query_id: callback_id, text: '⚠️ No encontré la tarea', show_alert: true });\n  return [];\n}\n\nconst t = res.task;\nconst detail = action === 'done'\n  ? ''\n  : `\\n🔔 Nuevo recordatorio: ${fmtLocal(t.reminder_at)}` + (action === 'tomorrow' ? `\\n📅 Vence: ${fmtLocal(t.due_date)}` : '');\n\nawait tg('answerCallbackQuery', { callback_query_id: callback_id, text: LABELS[action] });\nawait tg('editMessageText', {\n  chat_id,\n  message_id,\n  parse_mode: 'HTML',\n  text: `${escHtml(original_text)}\\n\\n<b>${LABELS[action]}</b>${escHtml(detail)}`,\n  // Sin reply_markup → se quitan los botones\n}).catch(() => {});\n\nreturn [{ json: { task_id, action, status: res.status } }];\n"
+      },
+      "notes": "done / snooze_1h / tomorrow",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "Telegram Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar y normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y normalizar": {
+      "main": [
+        [
+          {
+            "node": "Tipo de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de entrada": {
+      "main": [
+        [
+          {
+            "node": "Descargar audio (.ogg)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agente Gemini (Function Calling)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acción de botón",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar audio (.ogg)": {
+      "main": [
+        [
+          {
+            "node": "Agente Gemini (Function Calling)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Gemini (Function Calling)": {
+      "main": [
+        [
+          {
+            "node": "Responder en Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/San_Luis",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
