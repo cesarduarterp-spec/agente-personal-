@@ -87,6 +87,8 @@ services:
       TELEGRAM_ALLOWED_CHAT_ID: ${TELEGRAM_ALLOWED_CHAT_ID}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      XAI_API_KEY: ${XAI_API_KEY}            # respaldo Grok (si falla Gemini)
+      GROK_MODEL: ${GROK_MODEL:-grok-4.3}
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       NTFY_URL: https://ntfy.${DOMAIN}

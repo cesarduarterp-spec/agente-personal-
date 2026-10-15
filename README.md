@@ -1,11 +1,13 @@
 # Asistente Ejecutivo Personal · Voice-First
 
-Hablale por **Telegram** (audio o texto) → **Gemini 2.5** escucha el audio directamente y decide qué hacer →
+Hablale por **Telegram** (audio o texto) → **Gemini 2.5 Flash** escucha el audio directamente y decide qué hacer
+(si falla, responde **Grok** como respaldo) →
 **n8n** ejecuta contra **Supabase** → la **PWA** se actualiza en vivo. Además: recordatorios con botones,
 push crítico por **ntfy**, briefing matutino por Telegram y email, y sincronización bidireccional con **Google Calendar**.
 
 ```
-Telegram (voz/texto/botones) ──► n8n ──► Gemini 2.5 (audio nativo + function calling + Google Search)
+Telegram (voz/texto/botones) ──► n8n ──► Gemini 2.5 Flash (audio nativo + function calling)
+                                  │        └─ respaldo: Grok (xAI STT + function calling)
                                   │
                                   ├──► Supabase (tasks + RPC + Realtime) ◄──► PWA Next.js
                                   ├──► ntfy (push alta prioridad)
@@ -19,7 +21,7 @@ Telegram (voz/texto/botones) ──► n8n ──► Gemini 2.5 (audio nativo + 
 |---|---|---|
 | 1 | Script SQL (tabla `tasks`, triggers, funciones RPC, RLS, Realtime) | [`database/001_init.sql`](database/001_init.sql) |
 | 2 | `docker-compose.yml` + Caddy (SSL) + `.env` de ejemplo | [`infra/`](infra/) |
-| 3 | Diseño de nodos n8n + JSON de las tools del agente + workflows importables | [`docs/n8n-design.md`](docs/n8n-design.md), [`n8n/tools/gemini-tools.json`](n8n/tools/gemini-tools.json), [`n8n/workflows/`](n8n/workflows/) |
+| 3 | Diseño de nodos n8n + JSON de las tools del agente + workflows importables | [`docs/n8n-design.md`](docs/n8n-design.md), [`n8n/tools/agent-tools.json`](n8n/tools/agent-tools.json), [`n8n/workflows/`](n8n/workflows/) |
 | 4 | PWA Next.js (App Router, Tailwind v4, estilo shadcn/ui, `manifest.json`, service worker) | [`web/`](web/) |
 
 Guía paso a paso de despliegue: **[`docs/SETUP.md`](docs/SETUP.md)**.
@@ -31,12 +33,12 @@ database/001_init.sql          esquema + lógica de negocio en SQL (idempotente)
 infra/                         docker-compose.yml, Caddyfile, .env.example
 n8n/
   src/                         código de cada nodo Code (fuente de verdad)
-  tools/gemini-tools.json      function declarations de Gemini
+  tools/agent-tools.json       tools del agente (Gemini y Grok)
   prompts/system-prompt.md     prompt del agente
   workflows/                   JSON importables (generados)
 scripts/
   build-n8n.mjs                genera los workflows y valida la sintaxis
-  test-n8n-nodes.mjs           prueba los nodos contra Postgres real (Telegram/Gemini simulados)
+  test-n8n-nodes.mjs           prueba los nodos contra Postgres real (Telegram/Gemini/Grok simulados)
 web/                           PWA Next.js (vistas Hoy / Semana / Mes)
 ```
 

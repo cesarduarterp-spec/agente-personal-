@@ -24,10 +24,11 @@ const nodeCode = (f, name) => wf(f).nodes.find((n) => n.name === name).parameter
 const ENV = {
   SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srv', TELEGRAM_BOT_TOKEN: 'TOKEN',
   TELEGRAM_WEBHOOK_SECRET: 's3cret', TELEGRAM_ALLOWED_CHAT_ID: '42', GEMINI_API_KEY: 'g',
-  GCAL_SYNC_SECRET: 'gs', APP_URL: 'https://app.test', USER_NAME: 'César',
+  GCAL_SYNC_SECRET: 'gs', XAI_API_KEY: 'xk', APP_URL: 'https://app.test', USER_NAME: 'César',
 };
 
 let geminiScript = [];
+let grokScript = [];
 const calls = [];
 async function httpRequest(o) {
   calls.push(o);
@@ -51,6 +52,11 @@ async function httpRequest(o) {
   if (url.host === 'generativelanguage.googleapis.com') {
     const step = geminiScript.shift();
     assert.ok(step, 'Llamada a Gemini inesperada');
+    return step(o.body);
+  }
+  if (url.host === 'api.x.ai' && url.pathname === '/v1/responses') {
+    const step = grokScript.shift();
+    assert.ok(step, 'Llamada a Grok inesperada');
     return step(o.body);
   }
   throw new Error(`HTTP no mockeado: ${o.url}`);
@@ -80,7 +86,9 @@ assert.equal(out[0].json.kind, 'text');
 geminiScript = [
   (body) => {
     assert.match(body.systemInstruction.parts[0].text, /César/);
-    assert.ok(body.tools[0].functionDeclarations.length >= 8);
+    const names = body.tools[0].functionDeclarations.map((t) => t.name);
+    assert.equal(names.length, 7);
+    assert.ok(!names.includes('web_search'));
     return fc('create_task', { title: 'Llamar al proveedor de hormigón', category: '#Constructora', priority: 'alta', due_date: '2026-10-16T10:00:00-03:00' });
   },
   (body) => {
@@ -165,5 +173,81 @@ assert.equal(out[0].json.op, 'create');
 out = await run(filt, [{ json: { headers: { 'x-sync-secret': 'gs' }, body: { type: 'UPDATE', record: { ...rec, last_modified_by: 'gcal', title: 'Nuevo' }, old_record: rec } } }]);
 assert.equal(out.length, 0);
 console.log('✓ gcal: crea eventos y corta bucles');
+
+// 8) Respaldo Grok: Gemini caído (503 dos veces) con nota de voz → transcripción xAI → Grok
+const down = () => { const e = new Error('503 Service Unavailable'); e.httpCode = '503'; throw e; };
+psql("truncate tasks");
+let voice = await run(nodeCode('01-telegram-agente.json', 'Validar y normalizar'), [{ json: {
+  headers: { 'x-telegram-bot-api-secret-token': 's3cret' },
+  body: { message: { message_id: 20, chat: { id: 42 }, voice: { file_id: 'F2', mime_type: 'audio/ogg' } } },
+} }]);
+voice = await run(nodeCode('01-telegram-agente.json', 'Descargar audio (.ogg)'), voice);
+assert.equal(voice[0].binary.audio.mimeType, 'audio/ogg');
+geminiScript = [down, down];
+const gem = await run(nodeCode('01-telegram-agente.json', 'Agente Gemini (Function Calling)'), voice);
+assert.equal(gem[0].json.fallback, true);
+assert.ok(gem[0].binary.audio, 'el audio debe llegar al nodo de transcripción');
+grokScript = [
+  (body) => {
+    assert.equal(body.model, 'grok-4.3');
+    assert.equal(body.tools.length, 7);
+    assert.equal(body.input.at(-1).content, 'mañana a las 9 llamar al contador');
+    return { output: [{ type: 'function_call', call_id: 'c1', name: 'create_task',
+      arguments: JSON.stringify({ title: 'Llamar al contador', category: '#Personal', priority: 'media', due_date: '2026-10-16T09:00:00-03:00' }) }] };
+  },
+  (body) => {
+    assert.equal(body.input.at(-1).type, 'function_call_output');
+    assert.equal(JSON.parse(body.input.at(-1).output).status, 'created');
+    return { output: [{ type: 'message', content: [{ type: 'output_text', text: '✅ Agendado **Llamar al contador**' }] }] };
+  },
+];
+out = await run(nodeCode('01-telegram-agente.json', 'Agente Grok (respaldo)'),
+  [{ json: { text: 'mañana a las 9 llamar al contador', language: 'es' } }],
+  { 'Agente Gemini (Function Calling)': gem });
+assert.equal(out[0].json.provider, 'grok');
+assert.equal(psql("select count(*) from tasks where title = 'Llamar al contador'"), '1');
+await run(nodeCode('01-telegram-agente.json', 'Responder en Telegram'), out);
+const fb = tgSent('sendMessage').at(-1).body;
+assert.match(fb.text, /«mañana a las 9 llamar al contador»/);
+assert.match(fb.text, /Respondió Grok/);
+assert.ok(fb.reply_markup, 'botones de la tarea creada por Grok');
+console.log('✓ respaldo: Gemini caído → STT xAI → Grok crea la tarea');
+
+// 9) Gemini falla a mitad del bucle: Grok recibe las acciones hechas y no las repite
+let txtIn = await run(nodeCode('01-telegram-agente.json', 'Validar y normalizar'), [{ json: {
+  headers: { 'x-telegram-bot-api-secret-token': 's3cret' },
+  body: { message: { message_id: 21, chat: { id: 42 }, text: 'Agendá revisar planos el viernes 10hs' } },
+} }]);
+geminiScript = [
+  () => fc('create_task', { title: 'Revisar planos', category: '#Constructora', priority: 'media', due_date: '2026-10-16T10:00:00-03:00' }),
+  down, down,
+];
+const gem2 = await run(nodeCode('01-telegram-agente.json', 'Agente Gemini (Function Calling)'), txtIn);
+assert.equal(gem2[0].json.fallback, true);
+assert.equal(gem2[0].json.actions_done.length, 1);
+grokScript = [(body) => {
+  assert.match(body.input[0].content, /YA ejecutó estas acciones/);
+  return { output_text: '✅ Listo, **Revisar planos** quedó para el viernes 10:00.' };
+}];
+out = await run(nodeCode('01-telegram-agente.json', 'Agente Grok (respaldo)'), gem2, { 'Agente Gemini (Function Calling)': gem2 });
+assert.equal(psql("select count(*) from tasks where title = 'Revisar planos'"), '1');
+assert.equal(out[0].json.actions.length, 1);
+console.log('✓ respaldo: falla a mitad de camino sin duplicar tareas');
+
+// 10) Gemini y la transcripción fallan → mensaje claro, sin inventar
+out = await run(nodeCode('01-telegram-agente.json', 'Agente Grok (respaldo)'),
+  [{ json: { error: { message: 'xAI 500' } } }], { 'Agente Gemini (Function Calling)': gem });
+assert.match(out[0].json.reply, /mandás por texto/);
+console.log('✓ respaldo: si todo falla, pide reenviar por texto');
+
+// 11) Briefing con Gemini caído → Grok redacta
+geminiScript = [down, down];
+grokScript = [() => ({ output_text: 'Día cargado: arrancá por **Revisar planos**.' })];
+out = await run(nodeCode('03-briefing-diario.json', 'Gemini · briefing + Telegram'), [{ json: {} }], {
+  'Supabase · fn_briefing': [{ json: JSON.parse(psql('select fn_briefing()')) }],
+  'Clima · Open-Meteo': [{ json: {} }],
+});
+assert.match(out[0].json.html, /Revisar planos/);
+console.log('✓ briefing: respaldo con Grok y clima caído');
 
 console.log('\nTodos los nodos OK');

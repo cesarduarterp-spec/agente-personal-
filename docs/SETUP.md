@@ -9,13 +9,14 @@ Caddy emite los certificados SSL solo (puertos 80/443 abiertos en el firewall).
 | Servicio | Qué necesitás |
 |---|---|
 | Telegram | Bot con **@BotFather** → token. Tu `chat_id`: escribile a **@userinfobot**. |
-| Gemini | API key en Google AI Studio. |
+| Gemini | API key en Google AI Studio (modelo `gemini-2.5-flash`). |
+| xAI (Grok) | API key en console.x.ai — respaldo si Gemini falla. |
 | Supabase | URL, `anon` key y `service_role` key (Project Settings → API). |
 | Resend | API key y un dominio verificado para el remitente. |
 | Google Calendar | Credencial OAuth2 (se carga dentro de n8n, paso 6). |
 
 ## 3. Base de datos
-**A · Supabase Cloud (recomendado).**
+**A · Supabase Cloud (tu caso).**
 1. SQL Editor → pegá y ejecutá `database/001_init.sql`.
 2. Ejecutá también: `insert into app_users (email) values ('tu-email@dominio.com');`
 3. Authentication → URL Configuration → *Site URL* = `https://app.midominio.com`.

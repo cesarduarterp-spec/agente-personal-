@@ -33,8 +33,9 @@ Formato (español rioplatense, máx. 120 palabras, sin saludos genéricos):
 3) Una recomendación estratégica (ej. bloque de trabajo profundo, qué delegar o reprogramar de lo atrasado).
 Usá **negrita** solo para títulos de tareas.`;
 
-const res = await gemini({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6 } });
-const summary = geminiText(res) || 'Buen día. Acá está tu agenda.';
+let summary = '';
+try { summary = await llmText(prompt, 0.6); } catch (e) { /* sin IA: igual se manda la agenda */ }
+if (!summary) summary = 'Buen día. Acá está tu agenda.';
 
 // ---- Telegram ----
 const line = (t) => `${PRIORITY_ICON[t.priority] || '•'} ${hhmm(t.due_date)} <b>${escHtml(t.title)}</b> <i>${escHtml(t.category)}</i>`;

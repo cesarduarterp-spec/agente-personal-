@@ -25,4 +25,8 @@ const toBuffer = (b) => {
 const audioB64 = toBuffer(buffer).toString('base64');
 const mime = item.mime_type === 'audio/oga' ? 'audio/ogg' : item.mime_type;
 
-return [{ json: { ...item, audio_b64: audioB64, mime_type: mime } }];
+// json.audio_b64 → Gemini (inline).  binary.audio → nodo HTTP de transcripción xAI (respaldo).
+return [{
+  json: { ...item, audio_b64: audioB64, mime_type: mime },
+  binary: { audio: { data: audioB64, mimeType: mime, fileName: 'voz.ogg', fileExtension: 'ogg' } },
+}];

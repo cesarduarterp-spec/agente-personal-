@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Genera los workflows importables de n8n (n8n/workflows/*.json) a partir de:
-//   n8n/src/**.js            → código de cada nodo Code (con //@include _lib)
-//   n8n/tools/gemini-tools.json
+//   n8n/src/**.js            → código de cada nodo Code (con //@include _lib / _agent)
+//   n8n/tools/agent-tools.json   (tools compartidas por Gemini y Grok)
 //   n8n/prompts/system-prompt.md
 // Uso: node scripts/build-n8n.mjs   (valida además la sintaxis de cada nodo)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -14,14 +14,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const N8N = join(ROOT, 'n8n');
 const read = (p) => readFileSync(join(N8N, p), 'utf8');
 
-const LIB = read('src/_lib.js');
-const TOOLS = JSON.parse(read('tools/gemini-tools.json'));
+const TOOLS = JSON.parse(read('tools/agent-tools.json'));
 const SYSTEM_PROMPT = read('prompts/system-prompt.md');
 
 /** Código final de un nodo Code. */
 export function nodeCode(srcPath) {
   let code = read(srcPath)
-    .replace('//@include _lib', LIB)
+    .replace(/^\/\/@include (\w+)$/gm, (_, name) => read(`src/${name}.js`))
     .replace('/*__TOOLS__*/[]', JSON.stringify(TOOLS, null, 2))
     .replace("/*__SYSTEM_PROMPT__*/''", JSON.stringify(SYSTEM_PROMPT));
   // Validación de sintaxis: n8n ejecuta el código dentro de una función async
@@ -52,6 +51,12 @@ const eq = (left, right) => ({
   rightValue: right,
   operator: { type: 'string', operation: 'equals' },
 });
+const isTrue = (left) => ({
+  id: uuid(`${left}=true`),
+  leftValue: left,
+  rightValue: '',
+  operator: { type: 'boolean', operation: 'true', singleValue: true },
+});
 const conditions = (conds) => ({
   options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
   conditions: conds,
@@ -70,6 +75,8 @@ const switchOn = (wf, name, pos, field, keys) =>
   });
 const ifNode = (wf, name, pos, left, right) =>
   node(wf, name, 'n8n-nodes-base.if', 2.2, pos, { conditions: conditions([eq(left, right)]), options: {} });
+const ifTrue = (wf, name, pos, left) =>
+  node(wf, name, 'n8n-nodes-base.if', 2.2, pos, { conditions: conditions([isTrue(left)]), options: {} });
 const httpReq = (wf, name, pos, p, extra = {}) =>
   node(wf, name, 'n8n-nodes-base.httpRequest', 4.2, pos, { options: {}, ...p }, extra);
 const jsonBody = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: expr });
@@ -107,13 +114,30 @@ function workflow(name, nodes, links, settings = {}) {
 
 // ───────────── WF1 · Telegram → Agente Gemini ─────────────
 const W1 = 'wf1';
-const wf1 = workflow('01 · Telegram → Agente Gemini (voz y texto)', [
+const wf1 = workflow('01 · Telegram → Agente Gemini (voz y texto) + respaldo Grok', [
   webhook(W1, 'Telegram Webhook', [0, 300], 'telegram'),
   code(W1, 'Validar y normalizar', [220, 300], 'src/telegram/validar.js', 'Secret header + chat autorizado'),
   switchOn(W1, 'Tipo de entrada', [440, 300], 'kind', ['voice', 'text', 'callback']),
   code(W1, 'Descargar audio (.ogg)', [680, 140], 'src/telegram/descargar-audio.js'),
-  code(W1, 'Agente Gemini (Function Calling)', [920, 240], 'src/telegram/agente.js', 'Audio nativo + tools → Supabase RPC'),
-  code(W1, 'Responder en Telegram', [1160, 240], 'src/telegram/responder.js'),
+  code(W1, 'Agente Gemini (Function Calling)', [920, 240], 'src/telegram/agente.js', 'Gemini 2.5 Flash · audio nativo + tools'),
+  ifTrue(W1, '¿Gemini falló?', [1140, 240], '={{ $json.fallback }}'),
+  ifNode(W1, '¿Es nota de voz?', [1360, 120], '={{ $json.kind }}', 'voice'),
+  httpReq(W1, 'xAI · transcribir audio', [1580, 40], {
+    method: 'POST',
+    url: 'https://api.x.ai/v1/stt',
+    ...headers({ Authorization: '=Bearer {{ $env.XAI_API_KEY }}' }),
+    sendBody: true,
+    contentType: 'multipart-form-data',
+    bodyParameters: {
+      parameters: [
+        { name: 'language', value: 'es' },
+        // xAI exige que `file` sea el último campo del multipart
+        { parameterType: 'formBinaryData', name: 'file', inputDataFieldName: 'audio' },
+      ],
+    },
+  }, { onError: 'continueRegularOutput' }),
+  code(W1, 'Agente Grok (respaldo)', [1800, 120], 'src/telegram/agente-grok.js', 'Mismas tools · xAI Responses API'),
+  code(W1, 'Responder en Telegram', [2020, 300], 'src/telegram/responder.js'),
   code(W1, 'Acción de botón', [680, 480], 'src/telegram/boton.js', 'done / snooze_1h / tomorrow'),
 ], [
   ['Telegram Webhook', 'Validar y normalizar'],
@@ -122,7 +146,13 @@ const wf1 = workflow('01 · Telegram → Agente Gemini (voz y texto)', [
   ['Tipo de entrada', 'Agente Gemini (Function Calling)', 1],
   ['Tipo de entrada', 'Acción de botón', 2],
   ['Descargar audio (.ogg)', 'Agente Gemini (Function Calling)'],
-  ['Agente Gemini (Function Calling)', 'Responder en Telegram'],
+  ['Agente Gemini (Function Calling)', '¿Gemini falló?'],
+  ['¿Gemini falló?', '¿Es nota de voz?', 0],
+  ['¿Gemini falló?', 'Responder en Telegram', 1],
+  ['¿Es nota de voz?', 'xAI · transcribir audio', 0],
+  ['¿Es nota de voz?', 'Agente Grok (respaldo)', 1],
+  ['xAI · transcribir audio', 'Agente Grok (respaldo)'],
+  ['Agente Grok (respaldo)', 'Responder en Telegram'],
 ]);
 
 // ───────────── WF2 · Recordatorios cada 5 min ─────────────

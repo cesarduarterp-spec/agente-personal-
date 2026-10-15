@@ -93,4 +93,53 @@ function geminiText(res) {
     .join('')
     .trim();
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Gemini con 1 reintento ante saturación (429/5xx/timeout). Si vuelve a fallar, lanza el error. */
+async function geminiWithRetry(body, model) {
+  try {
+    return await gemini(body, model);
+  } catch (e) {
+    const code = Number(e?.httpCode || e?.response?.status || e?.statusCode || 0);
+    if (code && code < 500 && code !== 429) throw e;
+    await sleep(1500);
+    return gemini(body, model);
+  }
+}
+
+/** Grok (xAI) vía Responses API — respaldo cuando Gemini falla. */
+async function grok(body) {
+  if (!ENV.XAI_API_KEY) throw new Error('XAI_API_KEY no configurada');
+  return http({
+    method: 'POST',
+    url: 'https://api.x.ai/v1/responses',
+    headers: { Authorization: `Bearer ${ENV.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: { model: ENV.GROK_MODEL || 'grok-4.3', ...body },
+    json: true,
+    timeout: 120000,
+  });
+}
+
+function grokText(res) {
+  if (typeof res?.output_text === 'string' && res.output_text.trim()) return res.output_text.trim();
+  return (res?.output || [])
+    .filter((o) => o.type === 'message')
+    .flatMap((o) => o.content || [])
+    .filter((c) => c.type === 'output_text' && typeof c.text === 'string')
+    .map((c) => c.text)
+    .join('')
+    .trim();
+}
+
+/** Texto simple con Gemini y, si falla, con Grok (lo usa el briefing). */
+async function llmText(prompt, temperature = 0.6) {
+  try {
+    const res = await geminiWithRetry({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature } });
+    const text = geminiText(res);
+    if (text) return text;
+    throw new Error('Gemini devolvió texto vacío');
+  } catch (e) {
+    return grokText(await grok({ input: prompt, temperature, store: false }));
+  }
+}
 // ─── fin helpers ───
