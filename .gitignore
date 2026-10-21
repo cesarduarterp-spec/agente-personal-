@@ -1,3 +1,9 @@
 node_modules
-.env
 .DS_Store
+
+# Claves: nunca al repo (solo se versionan los ejemplos)
+.env
+.env.*
+!.env.example
+*.pem
+*.key

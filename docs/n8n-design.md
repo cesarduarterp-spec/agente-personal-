@@ -60,6 +60,17 @@ inline (una nota de voz de 1 minuto pesa ~100–300 KB).
 
 El briefing matutino usa el mismo respaldo (`llmText`): si Gemini falla, Grok redacta el resumen.
 
+**Probar el respaldo a propósito:** un mensaje que empieza con `/grok …` lo responde Grok aunque Gemini
+funcione. Con la variable `FORZAR_GROK=true` en n8n, todo (también los audios) pasa por Grok.
+
+## WF5 · Diagnóstico
+
+`Probar ahora` (manual) o `/diagnostico` en Telegram → `GCal · prueba` (usa tu credencial OAuth) →
+`Probar conexiones`: verifica variables, zona horaria de n8n y de la base, Telegram (y conecta el
+webhook del bot), Gemini, Grok (que `GROK_MODEL` exista en `/v1/models`), transcripción xAI, Supabase
+(y el aviso de cambios hacia n8n), Resend (manda un email de prueba), ntfy (manda un push de prueba) y
+Google Calendar. El informe ✔/⚠/✘ con el motivo llega por Telegram.
+
 Bucle del agente (`n8n/src/telegram/agente.js`):
 
 1. `fn_agent_context(chat_id)` → hora local, hasta 60 tareas abiertas e historial de las últimas 6 h.
@@ -79,7 +90,7 @@ flowchart LR
   D -- true --> E[HTTP: ntfy push prioridad 5]
 ```
 
-## WF3 · Briefing matutino (08:00 America/Argentina/San_Luis)
+## WF3 · Briefing matutino (08:00 America/Argentina/Buenos_Aires)
 
 ```mermaid
 flowchart LR

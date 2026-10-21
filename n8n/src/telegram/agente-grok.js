@@ -61,4 +61,4 @@ if (state.kind === 'voice') reply = `🎙️ *«${userText.slice(0, 300).replace
 
 await logExchange(chatId, userText, reply, actions.slice(done.length));
 
-return [{ json: { provider: 'grok', chat_id: chatId, reply_to: state.reply_to, reply, actions } }];
+return [{ json: { provider: 'grok', forced: !!state.forced, chat_id: chatId, reply_to: state.reply_to, reply, actions } }];

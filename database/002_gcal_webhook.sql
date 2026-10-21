@@ -1,12 +1,12 @@
 -- =============================================================================
---  002 · Webhook de base de datos → n8n (sincronización con Google Calendar)
+--  002 · Aviso de cambios de tareas → n8n (sincronización con Google Calendar)
 --  Reemplaza al "Database Webhook" del panel de Supabase (NO configures ambos:
 --  duplicarías los eventos). Usa pg_net, incluido en todos los proyectos Supabase.
 --
---  Ejecutar con psql pasando las variables:
---    psql "$SUPABASE_DB_URL" -v n8n_url='https://n8n.midominio.com/webhook/gcal-sync' \
---                            -v secret='<GCAL_SYNC_SECRET>' -f 002_gcal_webhook.sql
---  (scripts/instalar.sh lo hace solo)
+--  Cómo usarlo (Supabase → SQL Editor):
+--    1. Pegá y ejecutá este archivo completo.
+--    2. Ejecutá esta línea con TU dominio y TU GCAL_SYNC_SECRET (el mismo que cargaste en n8n):
+--         select fn_config_gcal_webhook('https://n8n.tudominio.com/webhook/gcal-sync', 'TU_GCAL_SYNC_SECRET');
 -- =============================================================================
 
 create extension if not exists pg_net with schema extensions;
@@ -18,10 +18,21 @@ create table if not exists public.app_config (
 );
 alter table public.app_config enable row level security;
 
-insert into public.app_config (key, value) values
-  ('gcal_webhook_url', :'n8n_url'),
-  ('gcal_webhook_secret', :'secret')
-on conflict (key) do update set value = excluded.value;
+-- Guarda la URL de n8n y el secreto (se puede volver a ejecutar para cambiarlos)
+create or replace function public.fn_config_gcal_webhook(p_url text, p_secret text) returns text
+language sql security definer set search_path = public as $$
+  insert into public.app_config (key, value) values
+    ('gcal_webhook_url', p_url),
+    ('gcal_webhook_secret', p_secret)
+  on conflict (key) do update set value = excluded.value;
+  select 'Aviso a n8n configurado: ' || p_url;
+$$;
+revoke execute on function public.fn_config_gcal_webhook(text, text) from public;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke execute on function public.fn_config_gcal_webhook(text, text) from anon, authenticated;
+  end if;
+end $$;
 
 -- Mismo payload que los Database Webhooks de Supabase: {type, table, schema, record, old_record}
 create or replace function public.trg_tasks_gcal_webhook() returns trigger

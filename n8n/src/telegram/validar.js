@@ -40,6 +40,16 @@ if (audio) {
     mime_type: audio.mime_type || 'audio/ogg', caption: msg.caption || '' } }];
 }
 if (msg.text) {
+  if (msg.text === '/diagnostico') {
+    // Dispara el workflow 05 (prueba todas las conexiones y responde acá)
+    await http({
+      method: 'POST',
+      url: `${String(ENV.WEBHOOK_URL || '').replace(/\/$/, '')}/webhook/diagnostico`,
+      headers: { 'x-diag-secret': ENV.TELEGRAM_WEBHOOK_SECRET },
+      body: {}, json: true,
+    }).catch(() => sendTelegram(msg.chat.id, '⚠️ No pude iniciar el diagnóstico. Ejecutá el workflow 05 desde n8n.'));
+    return [];
+  }
   if (msg.text === '/start') {
     await sendTelegram(msg.chat.id, '👋 Listo. Mandame una nota de voz o un texto con lo que necesites agendar.');
     return [];

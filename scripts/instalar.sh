@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Instalador del Asistente Ejecutivo Voice-First — correr EN EL VPS (Ubuntu)
+#  Instalador del Asistente Ejecutivo Voice-First — SOLO para un VPS VACÍO (Ubuntu)
+#
+#  ⚠ Si tu servidor tiene Coolify (u otro proxy en los puertos 80/443) NO uses este
+#    script: levanta su propio Caddy en 80/443. Seguí docs/COOLIFY.md.
+#    Por seguridad, el script se detiene solo si detecta Coolify o esos puertos ocupados.
 #
 #    sudo bash scripts/instalar.sh
 #
@@ -80,9 +84,19 @@ n8n_ok() {  # healthcheck dentro del contenedor (node siempre está en la imagen
 http_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$@" || echo 000; }
 
 # ─── Pasos ───────────────────────────────────────────────────────────────────
+servidor_compartido() {  # ¿Coolify o algo ya escuchando en 80/443?
+  [[ -d /data/coolify ]] && return 0
+  if command -v docker >/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -qiE 'coolify|traefik'; then return 0; fi
+  if command -v ss >/dev/null && ss -ltnH 2>/dev/null | awk '{print $4}' | grep -qE '(^|:)(80|443)$'; then return 0; fi
+  return 1
+}
+
 paso_docker() {
   paso "1/9 Docker"
   [[ $EUID -eq 0 ]] || fail "Corré el instalador con sudo: sudo bash scripts/instalar.sh"
+  if servidor_compartido; then
+    fail "Este servidor ya tiene Coolify/Traefik o algo en los puertos 80/443. No toqué nada. Seguí docs/COOLIFY.md."
+  fi
   if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
     ok "Docker ya instalado ($(docker --version | cut -d, -f1))"
   else
@@ -178,8 +192,10 @@ paso_base_datos() {
 insert into public.app_users (email) values (:'email') on conflict do nothing;
 SQL
   ok "Acceso a la app habilitado para $(getvar BRIEFING_EMAIL_TO)"
-  psql_sb -v n8n_url="https://n8n.$(getvar DOMAIN)/webhook/gcal-sync" -v secret="$(getvar GCAL_SYNC_SECRET)" \
-    -f - <"$ROOT/database/002_gcal_webhook.sql" >/dev/null
+  psql_sb -f - <"$ROOT/database/002_gcal_webhook.sql" >/dev/null
+  psql_sb -v n8n_url="https://n8n.$(getvar DOMAIN)/webhook/gcal-sync" -v secret="$(getvar GCAL_SYNC_SECRET)" -f - >/dev/null <<'SQL'
+select public.fn_config_gcal_webhook(:'n8n_url', :'secret');
+SQL
   ok "Webhook de tareas → n8n (Google Calendar) creado"
 
   local c

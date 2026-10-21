@@ -106,7 +106,7 @@ function workflow(id, name, nodes, links, settings = {}) {
     nodes,
     connections,
     active: false,
-    settings: { executionOrder: 'v1', timezone: 'America/Argentina/San_Luis', saveManualExecutions: true, ...settings },
+    settings: { executionOrder: 'v1', timezone: 'America/Argentina/Buenos_Aires', saveManualExecutions: true, ...settings },
     pinData: {},
     meta: { templateCredsSetupCompleted: false },
     tags: [],
@@ -195,7 +195,7 @@ const wf3 = workflow('asistBriefing003', '03 · Briefing matutino 08:00', [
     ...jsonBody('{}'),
   }),
   httpReq(W3, 'Clima · Open-Meteo', [440, 300], {
-    url: '=https://api.open-meteo.com/v1/forecast?latitude={{ $env.WEATHER_LAT }}&longitude={{ $env.WEATHER_LON }}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=America%2FArgentina%2FSan_Luis&forecast_days=1',
+    url: '=https://api.open-meteo.com/v1/forecast?latitude={{ $env.WEATHER_LAT }}&longitude={{ $env.WEATHER_LON }}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=America%2FArgentina%2FBuenos_Aires&forecast_days=1',
   }, { onError: 'continueRegularOutput' }),
   code(W3, 'Gemini · briefing + Telegram', [660, 300], 'src/briefing/redactar.js'),
   httpReq(W3, 'Resend · email HTML', [880, 300], {
@@ -252,6 +252,21 @@ const wf4 = workflow('asistGcalSync004', '04 · Sincronización Google Calendar 
   ['GCal · eventos modificados', 'Aplicar a tareas (RPC)'],
 ]);
 
+// ───────────── WF5 · Diagnóstico de conexiones ─────────────
+const W5 = 'wf5';
+const wf5 = workflow('asistDiagnost005', '05 · Diagnóstico (probar todas las conexiones)', [
+  node(W5, 'Probar ahora', 'n8n-nodes-base.manualTrigger', 1, [0, 200], {}),
+  webhook(W5, 'Diagnóstico por Telegram', [0, 400], 'diagnostico'),
+  httpReq(W5, 'GCal · prueba', [240, 300], {
+    url: 'https://www.googleapis.com/calendar/v3/users/me/calendarList/primary', ...GCAL_AUTH,
+  }, { onError: 'continueRegularOutput', alwaysOutputData: true }),
+  code(W5, 'Probar conexiones', [480, 300], 'src/diagnostico/probar.js', 'Resultado por Telegram'),
+], [
+  ['Probar ahora', 'GCal · prueba'],
+  ['Diagnóstico por Telegram', 'GCal · prueba'],
+  ['GCal · prueba', 'Probar conexiones'],
+]);
+
 const out = join(N8N, 'workflows');
 mkdirSync(out, { recursive: true });
 const files = {
@@ -259,6 +274,7 @@ const files = {
   '02-recordatorios.json': wf2,
   '03-briefing-diario.json': wf3,
   '04-gcal-sync.json': wf4,
+  '05-diagnostico.json': wf5,
 };
 for (const [file, wf] of Object.entries(files)) {
   writeFileSync(join(out, file), JSON.stringify(wf, null, 2) + '\n');

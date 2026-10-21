@@ -11,7 +11,7 @@ create extension if not exists unaccent;   -- "reunión" == "reunion"
 
 -- Zona horaria de negocio (UTC-3, sin horario de verano)
 create or replace function app_tz() returns text
-language sql immutable as $$ select 'America/Argentina/San_Luis'::text $$;
+language sql immutable as $$ select 'America/Argentina/Buenos_Aires'::text $$;
 
 -- unaccent() no es IMMUTABLE; este wrapper permite usarlo en índices.
 create or replace function f_unaccent(text) returns text
@@ -126,6 +126,7 @@ language sql stable as $$
     'due_date', t.due_date,
     'due_local', to_char(t.due_date at time zone app_tz(), 'Dy DD/MM HH24:MI'),
     'reminder_at', t.reminder_at,
+    'completed_at', t.completed_at,
     'gcal_event_id', t.gcal_event_id
   )
 $$;

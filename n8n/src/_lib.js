@@ -1,7 +1,7 @@
 // ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───
 // Los secretos se leen de variables de entorno del contenedor n8n ($env).
 const ENV = $env;
-const TZ = 'America/Argentina/San_Luis';
+const TZ = 'America/Argentina/Buenos_Aires';
 const http = (opts) => this.helpers.httpRequest(opts);
 const SB_URL = String(ENV.SUPABASE_URL || '').replace(/\/$/, '');
 const SB_HEADERS = {

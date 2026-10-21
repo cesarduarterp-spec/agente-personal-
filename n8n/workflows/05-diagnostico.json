@@ -1,0 +1,113 @@
+{
+  "id": "asistDiagnost005",
+  "name": "05 · Diagnóstico (probar todas las conexiones)",
+  "nodes": [
+    {
+      "id": "9361a812-f336-4fe9-a996-59d97e8513a1",
+      "name": "Probar ahora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a5158266-11ac-4e14-af9f-6b8634f9ba24",
+      "name": "Diagnóstico por Telegram",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "diagnostico",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "82f29bfb-bea6-4dc0-ab93-31cef361d2be"
+    },
+    {
+      "id": "50867258-7d1a-46d2-a5fa-b9a4ae42d936",
+      "name": "GCal · prueba",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "options": {},
+        "url": "https://www.googleapis.com/calendar/v3/users/me/calendarList/primary",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api"
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "f31ef4e0-7d2f-4d3a-aa6b-39770a26bf11",
+      "name": "Probar conexiones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// ─── Helpers comunes (inyectados por scripts/build-n8n.mjs en cada nodo Code) ───\n// Los secretos se leen de variables de entorno del contenedor n8n ($env).\nconst ENV = $env;\nconst TZ = 'America/Argentina/Buenos_Aires';\nconst http = (opts) => this.helpers.httpRequest(opts);\nconst SB_URL = String(ENV.SUPABASE_URL || '').replace(/\\/$/, '');\nconst SB_HEADERS = {\n  apikey: ENV.SUPABASE_SERVICE_ROLE_KEY,\n  Authorization: `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,\n  'Content-Type': 'application/json',\n};\n\n/** Llama a una función SQL vía PostgREST. Omite args vacíos para respetar los DEFAULT. */\nasync function rpc(fn, args = {}) {\n  const body = Object.fromEntries(\n    Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== ''),\n  );\n  return http({ method: 'POST', url: `${SB_URL}/rest/v1/rpc/${fn}`, headers: SB_HEADERS, body, json: true });\n}\n\nasync function tg(method, payload) {\n  return http({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${ENV.TELEGRAM_BOT_TOKEN}/${method}`,\n    body: payload,\n    json: true,\n  });\n}\n\nfunction escHtml(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\n/** Markdown liviano de Gemini → HTML soportado por Telegram. */\nfunction mdToTgHtml(md) {\n  return escHtml(md)\n    .replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>')\n    .replace(/(^|[^*])\\*(?!\\s)([^*\\n]+?)\\*(?!\\*)/g, '$1<i>$2</i>')\n    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')\n    .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g, '<a href=\"$2\">$1</a>')\n    .replace(/^#{1,6}\\s*(.+)$/gm, '<b>$1</b>')\n    .replace(/^\\s*[-*]\\s+/gm, '• ');\n}\n\n/** Envía mensaje HTML; si Telegram rechaza el formato, reintenta en texto plano. */\nasync function sendTelegram(chatId, html, extra = {}) {\n  const text = html.length > 4000 ? html.slice(0, 3990) + '…' : html;\n  try {\n    return await tg('sendMessage', {\n      chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra,\n    });\n  } catch (e) {\n    const plain = text.replace(/<[^>]+>/g, '');\n    return tg('sendMessage', { chat_id: chatId, text: plain, disable_web_page_preview: true, ...extra });\n  }\n}\n\nfunction fmtLocal(iso) {\n  if (!iso) return 'sin fecha';\n  return new Date(iso).toLocaleString('es-AR', {\n    timeZone: TZ, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',\n  });\n}\n\nconst PRIORITY_ICON = { alta: '🔴', media: '🟡', baja: '🟢' };\n\n/** Teclado inline estándar de una tarea (callback_data ≤ 64 bytes). */\nfunction taskKeyboard(id) {\n  return {\n    inline_keyboard: [[\n      { text: '✅ Tarea lista', callback_data: `t:done:${id}` },\n      { text: '⏳ +1 hora', callback_data: `t:snooze_1h:${id}` },\n      { text: '📅 Mañana', callback_data: `t:tomorrow:${id}` },\n    ]],\n  };\n}\n\nasync function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {\n  return http({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,\n    headers: { 'x-goog-api-key': ENV.GEMINI_API_KEY, 'Content-Type': 'application/json' },\n    body,\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction geminiText(res) {\n  return (res?.candidates?.[0]?.content?.parts || [])\n    .filter((p) => typeof p.text === 'string' && !p.thought)\n    .map((p) => p.text)\n    .join('')\n    .trim();\n}\nconst sleep = (ms) => new Promise((r) => setTimeout(r, ms));\n\n/** Gemini con 1 reintento ante saturación (429/5xx/timeout). Si vuelve a fallar, lanza el error. */\nasync function geminiWithRetry(body, model) {\n  try {\n    return await gemini(body, model);\n  } catch (e) {\n    const code = Number(e?.httpCode || e?.response?.status || e?.statusCode || 0);\n    if (code && code < 500 && code !== 429) throw e;\n    await sleep(1500);\n    return gemini(body, model);\n  }\n}\n\n/** Grok (xAI) vía Responses API — respaldo cuando Gemini falla. */\nasync function grok(body) {\n  if (!ENV.XAI_API_KEY) throw new Error('XAI_API_KEY no configurada');\n  return http({\n    method: 'POST',\n    url: 'https://api.x.ai/v1/responses',\n    headers: { Authorization: `Bearer ${ENV.XAI_API_KEY}`, 'Content-Type': 'application/json' },\n    body: { model: ENV.GROK_MODEL || 'grok-4.3', ...body },\n    json: true,\n    timeout: 120000,\n  });\n}\n\nfunction grokText(res) {\n  if (typeof res?.output_text === 'string' && res.output_text.trim()) return res.output_text.trim();\n  return (res?.output || [])\n    .filter((o) => o.type === 'message')\n    .flatMap((o) => o.content || [])\n    .filter((c) => c.type === 'output_text' && typeof c.text === 'string')\n    .map((c) => c.text)\n    .join('')\n    .trim();\n}\n\n/** Texto simple con Gemini y, si falla, con Grok (lo usa el briefing). */\nasync function llmText(prompt, temperature = 0.6) {\n  try {\n    const res = await geminiWithRetry({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature } });\n    const text = geminiText(res);\n    if (text) return text;\n    throw new Error('Gemini devolvió texto vacío');\n  } catch (e) {\n    return grokText(await grok({ input: prompt, temperature, store: false }));\n  }\n}\n// ─── fin helpers ───\n\n// Diagnóstico: prueba cada conexión REAL y manda el resultado (✔ / ⚠ / ✘ + motivo) por Telegram.\n// Además deja conectado el webhook del bot. Se ejecuta desde n8n (\"Probar ahora\") o con /diagnostico.\nconst gcal = $input.first().json;          // salida del nodo \"GCal · prueba\"\n\n// Si vino por webhook, exigir el secreto (evita que un tercero lo dispare)\ntry {\n  const hook = $('Diagnóstico por Telegram').first().json;\n  if ((hook.headers || {})['x-diag-secret'] !== ENV.TELEGRAM_WEBHOOK_SECRET) return [];\n} catch (e) { /* ejecutado a mano desde n8n */ }\n\nconst rows = [];\nconst add = (estado, servicio, detalle) => rows.push({ estado, servicio, detalle });\nconst errMsg = (e) => {\n  const body = e?.response?.body || e?.cause?.response?.data || e?.description;\n  const code = e?.httpCode || e?.response?.status || '';\n  const txt = typeof body === 'string' ? body : body ? JSON.stringify(body) : e?.message || String(e);\n  return `${code ? 'HTTP ' + code + ' · ' : ''}${txt}`.slice(0, 220);\n};\nasync function check(servicio, fn) {\n  try { await fn(); } catch (e) { add('✘', servicio, errMsg(e)); }\n}\n\n// 0) Variables de entorno\nconst REQUERIDAS = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'TELEGRAM_ALLOWED_CHAT_ID', 'GEMINI_API_KEY',\n  'XAI_API_KEY', 'GROK_MODEL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN',\n  'RESEND_API_KEY', 'BRIEFING_EMAIL_FROM', 'BRIEFING_EMAIL_TO', 'GCAL_SYNC_SECRET', 'WEBHOOK_URL', 'APP_URL'];\nconst faltan = REQUERIDAS.filter((k) => !ENV[k]);\nfaltan.length ? add('✘', 'Variables', `faltan en n8n: ${faltan.join(', ')}`) : add('✔', 'Variables', 'todas cargadas');\n\n// 1) Zona horaria de n8n\nconst tzN8n = $now.zoneName;\ntzN8n === TZ ? add('✔', 'Zona horaria n8n', `${tzN8n} · ahora ${$now.toFormat('dd/MM HH:mm')}`)\n  : add('✘', 'Zona horaria n8n', `es ${tzN8n}; poné GENERIC_TIMEZONE=${TZ} y TZ=${TZ}`);\n\n// 2) Telegram (y conexión del webhook)\nawait check('Telegram', async () => {\n  const me = await tg('getMe', {});\n  const base = String(ENV.WEBHOOK_URL || '').replace(/\\/$/, '');\n  if (base) {\n    await tg('setWebhook', {\n      url: `${base}/webhook/telegram`,\n      secret_token: ENV.TELEGRAM_WEBHOOK_SECRET,\n      allowed_updates: ['message', 'callback_query'],\n    });\n  }\n  const info = (await tg('getWebhookInfo', {})).result || {};\n  const detalle = `@${me.result.username} · webhook ${info.url ? 'conectado' : 'SIN conectar'}`\n    + (info.last_error_message ? ` · último error: ${info.last_error_message}` : '');\n  add(info.url && !info.last_error_message ? '✔' : '⚠', 'Telegram', detalle);\n});\n\n// 3) Gemini\nawait check('Gemini', async () => {\n  const model = ENV.GEMINI_MODEL || 'gemini-2.5-flash';\n  const res = await gemini({ contents: [{ role: 'user', parts: [{ text: 'Respondé solo: OK' }] }] }, model);\n  add(geminiText(res) ? '✔' : '⚠', 'Gemini', `${model} respondió \"${geminiText(res).slice(0, 20)}\"`);\n});\n\n// 4) Grok: ¿existe el modelo configurado?\nawait check('Grok', async () => {\n  const list = await http({ method: 'GET', url: 'https://api.x.ai/v1/models',\n    headers: { Authorization: `Bearer ${ENV.XAI_API_KEY}` }, json: true });\n  const ids = (list.data || list.models || []).map((m) => m.id).filter(Boolean);\n  const model = ENV.GROK_MODEL || 'grok-4.3';\n  if (ids.length && !ids.includes(model)) {\n    const sugeridos = ids.filter((id) => /^grok-\\d/.test(id) && !/image|video|imagine|voice|stt|tts/.test(id));\n    add('✘', 'Grok', `el modelo \"${model}\" NO existe para tu clave. Disponibles: ${sugeridos.join(', ') || ids.join(', ')}. Cambiá GROK_MODEL.`);\n    return;\n  }\n  const res = await grok({ input: 'Respondé solo: OK', store: false });\n  add('✔', 'Grok', `${model} respondió \"${grokText(res).slice(0, 20)}\"`);\n});\n\n// 5) Transcripción de audio xAI (respaldo de notas de voz): WAV de 0,5 s casi silencioso\nawait check('Grok · audio', async () => {\n  const pcm = '\\x7f'.repeat(4096);\n  const wav = 'RIFF' + '\\x24\\x10\\x00\\x00' + 'WAVEfmt ' + '\\x10\\x00\\x00\\x00' + '\\x01\\x00\\x01\\x00'\n    + '\\x40\\x1f\\x00\\x00' + '\\x40\\x1f\\x00\\x00' + '\\x01\\x00\\x08\\x00' + 'data' + '\\x00\\x10\\x00\\x00' + pcm;\n  const boundary = 'diag' + Date.now();\n  const body = `--${boundary}\\r\\nContent-Disposition: form-data; name=\"language\"\\r\\n\\r\\nes\\r\\n`\n    + `--${boundary}\\r\\nContent-Disposition: form-data; name=\"file\"; filename=\"prueba.wav\"\\r\\nContent-Type: audio/wav\\r\\n\\r\\n${wav}\\r\\n--${boundary}--\\r\\n`;\n  await http({ method: 'POST', url: 'https://api.x.ai/v1/stt', body, json: false,\n    headers: { Authorization: `Bearer ${ENV.XAI_API_KEY}`, 'Content-Type': `multipart/form-data; boundary=${boundary}` } });\n  add('✔', 'Grok · audio', 'transcripción /v1/stt disponible');\n});\n\n// 6) Supabase (base, zona horaria de la base, webhook hacia n8n)\nawait check('Supabase', async () => {\n  const ctx = await rpc('fn_agent_context', {});\n  const dbNow = ctx.now_local.slice(11, 16);\n  const n8nNow = $now.toFormat('HH:mm');\n  const tzOk = Math.abs(Number(dbNow.replace(':', '')) - Number(n8nNow.replace(':', ''))) <= 2;\n  const cfg = await http({ method: 'GET', url: `${SB_URL}/rest/v1/app_config?select=key,value`, headers: SB_HEADERS, json: true })\n    .catch(() => null);\n  const hook = (cfg || []).find((r) => r.key === 'gcal_webhook_url');\n  const hookOk = hook && ENV.WEBHOOK_URL && hook.value.startsWith(String(ENV.WEBHOOK_URL).replace(/\\/$/, ''));\n  add(tzOk && hookOk ? '✔' : '⚠', 'Supabase',\n    `base OK · hora de la base ${dbNow} vs n8n ${n8nNow}${tzOk ? '' : ' (¡no coinciden! correr 001_init.sql otra vez)'}`\n    + (hookOk ? ' · aviso de cambios → n8n OK' : ' · falta configurar el aviso de cambios (002_gcal_webhook.sql)'));\n});\n\n// 7) Resend (email del briefing): manda un email de prueba\nawait check('Resend', async () => {\n  const r = await http({ method: 'POST', url: 'https://api.resend.com/emails', json: true,\n    headers: { Authorization: `Bearer ${ENV.RESEND_API_KEY}` },\n    body: { from: ENV.BRIEFING_EMAIL_FROM, to: [ENV.BRIEFING_EMAIL_TO],\n      subject: '✅ Diagnóstico del asistente', html: '<p>Si leés esto, el email del briefing funciona.</p>' } });\n  add('✔', 'Resend', `email de prueba enviado a ${ENV.BRIEFING_EMAIL_TO} (id ${r.id})`);\n});\n\n// 8) ntfy (push al celular)\nawait check('ntfy', async () => {\n  await http({ method: 'POST', url: String(ENV.NTFY_URL).replace(/\\/$/, ''), json: true,\n    headers: { Authorization: `Bearer ${ENV.NTFY_TOKEN}` },\n    body: { topic: ENV.NTFY_TOPIC, title: '✅ Diagnóstico', message: 'Si ves esto en el celular, las alertas funcionan.', priority: 3 } });\n  add('✔', 'ntfy', `push enviada al tema \"${ENV.NTFY_TOPIC}\" (mirá el celular)`);\n});\n\n// 9) Google Calendar (lo prueba el nodo anterior con tu credencial OAuth)\nif (gcal.error || !gcal.id) {\n  add('✘', 'Google Calendar', `sin acceso: ${errMsg(gcal.error || gcal)} → cargá la credencial \"Google Calendar OAuth2 API\" en los nodos GCal`);\n} else {\n  add(gcal.timeZone === TZ ? '✔' : '⚠', 'Google Calendar',\n    `${gcal.summary} · zona ${gcal.timeZone}${gcal.timeZone === TZ ? '' : ` (conviene ${TZ} en la configuración de Calendar)`}`);\n}\n\n// Informe\nconst ok = rows.filter((r) => r.estado === '✔').length;\nconst html = `🩺 <b>Diagnóstico</b> · ${ok}/${rows.length} OK\\n\\n`\n  + rows.map((r) => `${r.estado} <b>${escHtml(r.servicio)}</b>: ${escHtml(r.detalle)}`).join('\\n');\nif (ENV.TELEGRAM_BOT_TOKEN && ENV.TELEGRAM_ALLOWED_CHAT_ID) {\n  await sendTelegram(ENV.TELEGRAM_ALLOWED_CHAT_ID, html).catch(() => {});\n}\nreturn rows.map((r) => ({ json: r }));\n"
+      },
+      "notes": "Resultado por Telegram",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "Probar ahora": {
+      "main": [
+        [
+          {
+            "node": "GCal · prueba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diagnóstico por Telegram": {
+      "main": [
+        [
+          {
+            "node": "GCal · prueba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GCal · prueba": {
+      "main": [
+        [
+          {
+            "node": "Probar conexiones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/Buenos_Aires",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

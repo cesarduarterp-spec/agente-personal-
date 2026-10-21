@@ -1,5 +1,7 @@
 # Puesta en marcha (VPS Ubuntu + Docker)
 
+> **¿Tu servidor tiene Coolify?** Seguí [`docs/COOLIFY.md`](COOLIFY.md). Esta guía es solo para un VPS vacío.
+
 ## ⚡ Opción rápida: instalador automático
 
 Con las claves a mano (tabla del §2) y el DNS creado (§1), en el VPS:

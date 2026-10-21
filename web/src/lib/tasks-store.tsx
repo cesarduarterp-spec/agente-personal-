@@ -7,6 +7,7 @@ import { CATEGORIES, type Category, type Task } from './types';
 
 type Filter = Category | 'all';
 type LiveState = 'connecting' | 'live' | 'offline';
+export interface Toast { id: number; text: string; tone: 'done' | 'later' | 'info' }
 
 interface TasksCtx {
   tasks: Task[];           // ya filtradas por categoría
@@ -19,6 +20,7 @@ interface TasksCtx {
   reopen: (id: string) => Promise<void>;
   postpone: (id: string) => Promise<void>;   // pasa a mañana (misma acción que el botón de Telegram)
   snooze: (id: string) => Promise<void>;     // recordatorio +1h
+  toast: Toast | null;                       // aviso visual (reemplaza la vibración en iPhone)
 }
 
 const Ctx = createContext<TasksCtx | null>(null);
@@ -30,6 +32,13 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState<LiveState>('connecting');
   const [filter, setFilterState] = useState<Filter>('all');
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const notify = useCallback((text: string, tone: Toast['tone']) => {
+    const id = Date.now();
+    setToast({ id, text, tone });
+    setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 1800);
+  }, []);
 
   useEffect(() => {
     try {
@@ -100,34 +109,45 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const runAction = useCallback(
     async (id: string, action: 'done' | 'snooze_1h' | 'tomorrow', optimistic: (t: Task) => Task) => {
       const current = byId[id];
-      if (current) upsert([optimistic(current)]);
+      const next = current ? optimistic(current) : undefined;
+      if (next) upsert([next]);
       const { data, error } = await supabase.rpc('fn_task_action', { p_task_id: id, p_action: action, p_by: 'pwa' });
       if (error || data?.status !== 'ok') return load();
-      upsert([{ ...current, ...data.task } as Task]);
+      // Se combina con la versión optimista para no perder campos que la RPC no devuelve
+      upsert([{ ...next, ...data.task } as Task]);
     },
     [byId, supabase, upsert, load],
   );
 
   const complete = useCallback(
-    (id: string) => runAction(id, 'done', (t) => ({ ...t, status: 'completada', completed_at: new Date().toISOString() })),
-    [runAction],
+    (id: string) => {
+      notify('✓ Completada', 'done');
+      return runAction(id, 'done', (t) => ({ ...t, status: 'completada', completed_at: new Date().toISOString() }));
+    },
+    [runAction, notify],
   );
 
   const postpone = useCallback(
-    (id: string) =>
-      runAction(id, 'tomorrow', (t) => ({
+    (id: string) => {
+      notify('📅 Pasada a mañana', 'later');
+      return runAction(id, 'tomorrow', (t) => ({
         ...t,
         due_date: t.due_date ? new Date(new Date(t.due_date).getTime() + 864e5).toISOString() : t.due_date,
-      })),
-    [runAction],
+      }));
+    },
+    [runAction, notify],
   );
 
   const snooze = useCallback(
-    (id: string) => runAction(id, 'snooze_1h', (t) => ({ ...t, reminder_at: new Date(Date.now() + 36e5).toISOString() })),
-    [runAction],
+    (id: string) => {
+      notify('🔔 Te aviso en 1 hora', 'info');
+      return runAction(id, 'snooze_1h', (t) => ({ ...t, reminder_at: new Date(Date.now() + 36e5).toISOString() }));
+    },
+    [runAction, notify],
   );
 
   const reopen = useCallback(async (id: string) => {
+    notify('↺ Marcada como pendiente', 'info');
     const current = byId[id];
     if (current) upsert([{ ...current, status: 'pendiente', completed_at: null }]);
     const { error } = await supabase
@@ -135,7 +155,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       .update({ status: 'pendiente', last_modified_by: 'pwa' })
       .eq('id', id);
     if (error) load();
-  }, [byId, supabase, upsert, load]);
+  }, [byId, supabase, upsert, load, notify]);
 
   const allTasks = useMemo(() => Object.values(byId).filter((t) => t.status !== 'cancelada'), [byId]);
   const tasks = useMemo(
@@ -144,8 +164,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<TasksCtx>(
-    () => ({ tasks, allTasks, loading, live, filter, setFilter, complete, reopen, postpone, snooze }),
-    [tasks, allTasks, loading, live, filter, setFilter, complete, reopen, postpone, snooze],
+    () => ({ tasks, allTasks, loading, live, filter, setFilter, complete, reopen, postpone, snooze, toast }),
+    [tasks, allTasks, loading, live, filter, setFilter, complete, reopen, postpone, snooze, toast],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

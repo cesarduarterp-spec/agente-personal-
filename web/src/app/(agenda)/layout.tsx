@@ -1,5 +1,6 @@
 import { AuthGate } from '@/components/auth-gate';
 import { AppNav, VoiceFab } from '@/components/app-nav';
+import { ActionToast } from '@/components/action-toast';
 import { TasksProvider } from '@/lib/tasks-store';
 
 export default function AgendaLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +14,7 @@ export default function AgendaLayout({ children }: { children: React.ReactNode }
           </main>
         </div>
         <VoiceFab />
+        <ActionToast />
       </TasksProvider>
     </AuthGate>
   );

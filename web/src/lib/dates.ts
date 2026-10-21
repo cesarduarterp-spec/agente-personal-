@@ -2,7 +2,7 @@ import { addDays, format, isSameDay, startOfDay, startOfWeek, isBefore } from 'd
 import { es } from 'date-fns/locale';
 import type { Task } from './types';
 
-// El dispositivo está en America/Argentina/San_Luis: se usa la hora local del navegador.
+// El dispositivo está en America/Argentina/Buenos_Aires: se usa la hora local del navegador.
 export { addDays, isSameDay, startOfDay };
 
 export const dayKey = (d: Date) => format(d, 'yyyy-MM-dd');

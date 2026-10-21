@@ -7,6 +7,27 @@
 const item = $input.first();
 const input = item.json;
 const chatId = input.chat_id;
+
+// Prueba del respaldo a propósito:
+//  - mensaje que empieza con "/grok ..."  → ese mensaje lo responde Grok
+//  - variable FORZAR_GROK=true en n8n     → todo (incluidos audios) pasa por Grok
+const porComando = input.kind === 'text' && /^\/grok\b/i.test(input.text || '');
+if (porComando || String(ENV.FORZAR_GROK).toLowerCase() === 'true') {
+  return [{
+    json: {
+      fallback: true,
+      forced: true,
+      error: porComando ? 'forzado con /grok' : 'forzado con FORZAR_GROK=true',
+      kind: input.kind,
+      chat_id: chatId,
+      reply_to: input.message_id,
+      text: porComando ? input.text.replace(/^\/grok\b\s*/i, '') || 'Decime qué tareas tengo hoy' : input.text,
+      caption: input.caption,
+      actions_done: [],
+    },
+    binary: item.binary,
+  }];
+}
 const { systemText, history } = await buildContext(chatId);
 
 const contents = history.map((m) => ({ role: m.role, parts: [{ text: m.content }] }));
