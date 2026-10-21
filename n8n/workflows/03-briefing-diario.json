@@ -106,7 +106,8 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({\n  from: $env.BRIEFING_EMAIL_FROM,\n  to: [$env.BRIEFING_EMAIL_TO],\n  subject: $json.subject,\n  html: $json.html\n}) }}"
-      }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {

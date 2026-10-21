@@ -1,5 +1,8 @@
 # Instalación en un servidor con Coolify
 
+> ¿Primera vez? Empezá por [`docs/EMPEZAR.md`](EMPEZAR.md): solo lo esencial, en 6 pasos.
+> Esta guía es la instalación completa (etapa 2).
+
 Esta guía **no toca** lo que ya tenés corriendo. Coolify (con Traefik) sigue manejando los puertos
 80 y 443 y pone los dominios y el SSL. Nosotros solo agregamos 3 recursos nuevos dentro de Coolify.
 

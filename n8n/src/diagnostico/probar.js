@@ -22,11 +22,17 @@ async function check(servicio, fn) {
 }
 
 // 0) Variables de entorno
+// Etapa 1 (lo esencial) vs. servicios opcionales que se suman después
 const REQUERIDAS = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'TELEGRAM_ALLOWED_CHAT_ID', 'GEMINI_API_KEY',
-  'XAI_API_KEY', 'GROK_MODEL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN',
-  'RESEND_API_KEY', 'BRIEFING_EMAIL_FROM', 'BRIEFING_EMAIL_TO', 'GCAL_SYNC_SECRET', 'WEBHOOK_URL', 'APP_URL'];
+  'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'WEBHOOK_URL'];
 const faltan = REQUERIDAS.filter((k) => !ENV[k]);
-faltan.length ? add('✘', 'Variables', `faltan en n8n: ${faltan.join(', ')}`) : add('✔', 'Variables', 'todas cargadas');
+faltan.length ? add('✘', 'Variables', `faltan en n8n: ${faltan.join(', ')}`) : add('✔', 'Variables', 'las esenciales están cargadas');
+const PENDIENTE = '⏸';
+const opcional = (servicio, vars) => {
+  const vacias = vars.filter((k) => !ENV[k]);
+  if (vacias.length) { add(PENDIENTE, servicio, `pendiente (opcional): falta ${vacias.join(', ')}`); return false; }
+  return true;
+};
 
 // 1) Zona horaria de n8n
 const tzN8n = $now.zoneName;
@@ -58,7 +64,8 @@ await check('Gemini', async () => {
 });
 
 // 4) Grok: ¿existe el modelo configurado?
-await check('Grok', async () => {
+const conGrok = opcional('Grok', ['XAI_API_KEY']);
+if (conGrok) await check('Grok', async () => {
   const list = await http({ method: 'GET', url: 'https://api.x.ai/v1/models',
     headers: { Authorization: `Bearer ${ENV.XAI_API_KEY}` }, json: true });
   const ids = (list.data || list.models || []).map((m) => m.id).filter(Boolean);
@@ -73,7 +80,7 @@ await check('Grok', async () => {
 });
 
 // 5) Transcripción de audio xAI (respaldo de notas de voz): WAV de 0,5 s casi silencioso
-await check('Grok · audio', async () => {
+if (conGrok) await check('Grok · audio', async () => {
   const pcm = '\x7f'.repeat(4096);
   const wav = 'RIFF' + '\x24\x10\x00\x00' + 'WAVEfmt ' + '\x10\x00\x00\x00' + '\x01\x00\x01\x00'
     + '\x40\x1f\x00\x00' + '\x40\x1f\x00\x00' + '\x01\x00\x08\x00' + 'data' + '\x00\x10\x00\x00' + pcm;
@@ -95,13 +102,13 @@ await check('Supabase', async () => {
     .catch(() => null);
   const hook = (cfg || []).find((r) => r.key === 'gcal_webhook_url');
   const hookOk = hook && ENV.WEBHOOK_URL && hook.value.startsWith(String(ENV.WEBHOOK_URL).replace(/\/$/, ''));
-  add(tzOk && hookOk ? '✔' : '⚠', 'Supabase',
+  add(tzOk && (hookOk || !ENV.GCAL_SYNC_SECRET) ? '✔' : '⚠', 'Supabase',
     `base OK · hora de la base ${dbNow} vs n8n ${n8nNow}${tzOk ? '' : ' (¡no coinciden! correr 001_init.sql otra vez)'}`
-    + (hookOk ? ' · aviso de cambios → n8n OK' : ' · falta configurar el aviso de cambios (002_gcal_webhook.sql)'));
+    + (hookOk ? ' · aviso de cambios → n8n OK' : ENV.GCAL_SYNC_SECRET ? ' · falta configurar el aviso de cambios (002_gcal_webhook.sql)' : ''));
 });
 
 // 7) Resend (email del briefing): manda un email de prueba
-await check('Resend', async () => {
+if (opcional('Resend', ['RESEND_API_KEY', 'BRIEFING_EMAIL_FROM', 'BRIEFING_EMAIL_TO'])) await check('Resend', async () => {
   const r = await http({ method: 'POST', url: 'https://api.resend.com/emails', json: true,
     headers: { Authorization: `Bearer ${ENV.RESEND_API_KEY}` },
     body: { from: ENV.BRIEFING_EMAIL_FROM, to: [ENV.BRIEFING_EMAIL_TO],
@@ -110,7 +117,7 @@ await check('Resend', async () => {
 });
 
 // 8) ntfy (push al celular)
-await check('ntfy', async () => {
+if (opcional('ntfy', ['NTFY_URL', 'NTFY_TOKEN'])) await check('ntfy', async () => {
   await http({ method: 'POST', url: String(ENV.NTFY_URL).replace(/\/$/, ''), json: true,
     headers: { Authorization: `Bearer ${ENV.NTFY_TOKEN}` },
     body: { topic: ENV.NTFY_TOPIC, title: '✅ Diagnóstico', message: 'Si ves esto en el celular, las alertas funcionan.', priority: 3 } });
@@ -118,7 +125,9 @@ await check('ntfy', async () => {
 });
 
 // 9) Google Calendar (lo prueba el nodo anterior con tu credencial OAuth)
-if (gcal.error || !gcal.id) {
+if (!ENV.GCAL_SYNC_SECRET && (gcal.error || !gcal.id)) {
+  add(PENDIENTE, 'Google Calendar', 'pendiente (opcional): se configura en la etapa 2');
+} else if (gcal.error || !gcal.id) {
   add('✘', 'Google Calendar', `sin acceso: ${errMsg(gcal.error || gcal)} → cargá la credencial "Google Calendar OAuth2 API" en los nodos GCal`);
 } else {
   add(gcal.timeZone === TZ ? '✔' : '⚠', 'Google Calendar',
@@ -127,7 +136,9 @@ if (gcal.error || !gcal.id) {
 
 // Informe
 const ok = rows.filter((r) => r.estado === '✔').length;
-const html = `🩺 <b>Diagnóstico</b> · ${ok}/${rows.length} OK\n\n`
+const activos = rows.filter((r) => r.estado !== PENDIENTE).length;
+const html = `🩺 <b>Diagnóstico</b> · ${ok}/${activos} OK`
+  + (activos < rows.length ? ` · ${rows.length - activos} pendientes (opcionales)` : '') + '\n\n'
   + rows.map((r) => `${r.estado} <b>${escHtml(r.servicio)}</b>: ${escHtml(r.detalle)}`).join('\n');
 if (ENV.TELEGRAM_BOT_TOKEN && ENV.TELEGRAM_ALLOWED_CHAT_ID) {
   await sendTelegram(ENV.TELEGRAM_ALLOWED_CHAT_ID, html).catch(() => {});

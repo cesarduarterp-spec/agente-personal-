@@ -162,7 +162,7 @@ const wf2 = workflow('asistRecordat002', '02 · Motor de recordatorios (cada 5 m
   schedule(W2, 'Cada 5 minutos', [0, 300], { field: 'minutes', minutesInterval: 5 }),
   code(W2, 'Reclamar recordatorios (RPC)', [220, 300], 'src/recordatorios/reclamar.js', 'Marca reminder_sent=true atómicamente'),
   code(W2, 'Telegram + botones', [440, 300], 'src/recordatorios/enviar.js'),
-  ifNode(W2, '¿Prioridad alta?', [660, 300], '={{ $json.priority }}', 'alta'),
+  ifNode(W2, '¿Prioridad alta?', [660, 300], '={{ $json.priority + ($env.NTFY_URL ? \'\' : \'-sin-ntfy\') }}', 'alta'),
   httpReq(W2, 'ntfy · push crítico', [880, 220], {
     method: 'POST',
     url: '={{ $env.NTFY_URL }}',
@@ -208,7 +208,7 @@ const wf3 = workflow('asistBriefing003', '03 · Briefing matutino 08:00', [
   subject: $json.subject,
   html: $json.html
 }) }}`),
-  }),
+  }, { onError: 'continueRegularOutput' }),  // sin Resend configurado, el briefing igual llega por Telegram
 ], [
   ['Todos los días 08:00', 'Supabase · fn_briefing'],
   ['Supabase · fn_briefing', 'Clima · Open-Meteo'],

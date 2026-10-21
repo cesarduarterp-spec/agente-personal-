@@ -24,7 +24,7 @@ Telegram (voz/texto/botones) ──► n8n ──► Gemini 2.5 Flash (audio nat
 | 3 | Diseño de nodos n8n + JSON de las tools del agente + workflows importables | [`docs/n8n-design.md`](docs/n8n-design.md), [`n8n/tools/agent-tools.json`](n8n/tools/agent-tools.json), [`n8n/workflows/`](n8n/workflows/) |
 | 4 | PWA Next.js (App Router, Tailwind v4, estilo shadcn/ui, `manifest.json`, service worker) | [`web/`](web/) |
 
-Estado (hecho / falta): [`docs/ESTADO.md`](docs/ESTADO.md) · **Servidor con Coolify: [`docs/COOLIFY.md`](docs/COOLIFY.md)** · VPS vacío: `sudo bash scripts/instalar.sh` ([`docs/SETUP.md`](docs/SETUP.md)).
+**👉 Empezar acá: [`docs/EMPEZAR.md`](docs/EMPEZAR.md)** (etapa 1, lo esencial) · Estado: [`docs/ESTADO.md`](docs/ESTADO.md) · **Servidor con Coolify: [`docs/COOLIFY.md`](docs/COOLIFY.md)** · VPS vacío: `sudo bash scripts/instalar.sh` ([`docs/SETUP.md`](docs/SETUP.md)).
 
 ## Estructura
 

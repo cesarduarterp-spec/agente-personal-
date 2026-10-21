@@ -4,7 +4,8 @@
 #  - NO publica puertos: Traefik (Coolify) pone el dominio y el SSL.
 #    En Coolify → este recurso → servicio "n8n" → Domains:  https://n8n.tudominio.com:5678
 #  - Todas las ${VARIABLES} aparecen en la pestaña "Environment Variables" de Coolify.
-#    Las marcadas con :? son obligatorias. Ninguna clave va escrita acá.
+#    Las marcadas con :? son obligatorias; las demás se pueden dejar vacías al principio.
+#    Ninguna clave va escrita acá.
 # =============================================================================
 services:
   n8n:
@@ -44,22 +45,22 @@ services:
       - TELEGRAM_ALLOWED_CHAT_ID=${TELEGRAM_ALLOWED_CHAT_ID:?}
       - GEMINI_API_KEY=${GEMINI_API_KEY:?}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-      - XAI_API_KEY=${XAI_API_KEY:?}
+      - XAI_API_KEY=${XAI_API_KEY:-}            # opcional (respaldo Grok)
       - GROK_MODEL=${GROK_MODEL:-grok-4.3}
       - FORZAR_GROK=${FORZAR_GROK:-false}
       - SUPABASE_URL=${SUPABASE_URL:?}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:?}
-      - NTFY_URL=https://${NTFY_HOST:?ntfy.tudominio.com}
+      - NTFY_URL=${NTFY_URL:-}                  # opcional: https://ntfy.tudominio.com
       - NTFY_TOPIC=${NTFY_TOPIC:-agenda-alertas}
-      - NTFY_TOKEN=${NTFY_TOKEN:?}
-      - RESEND_API_KEY=${RESEND_API_KEY:?}
-      - BRIEFING_EMAIL_FROM=${BRIEFING_EMAIL_FROM:?}
-      - BRIEFING_EMAIL_TO=${BRIEFING_EMAIL_TO:?}
+      - NTFY_TOKEN=${NTFY_TOKEN:-}              # opcional
+      - RESEND_API_KEY=${RESEND_API_KEY:-}      # opcional (email del briefing)
+      - BRIEFING_EMAIL_FROM=${BRIEFING_EMAIL_FROM:-}
+      - BRIEFING_EMAIL_TO=${BRIEFING_EMAIL_TO:-}
       - WEATHER_LAT=${WEATHER_LAT:--33.30}
       - WEATHER_LON=${WEATHER_LON:--66.34}
       - WEATHER_CITY=${WEATHER_CITY:-San Luis}
-      - GCAL_SYNC_SECRET=${GCAL_SYNC_SECRET:?}
-      - APP_URL=https://${APP_HOST:?app.tudominio.com}
+      - GCAL_SYNC_SECRET=${GCAL_SYNC_SECRET:-}  # opcional (Google Calendar)
+      - APP_URL=${APP_URL:-}                    # opcional: https://app.tudominio.com
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:

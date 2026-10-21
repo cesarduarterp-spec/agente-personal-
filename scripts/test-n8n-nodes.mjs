@@ -346,6 +346,17 @@ assert.equal(byName['Google Calendar'].estado, '✘');
 ENV.GROK_MODEL = 'grok-4.3';
 rep = await run(diag, [{ json: {} }], { 'Diagnóstico por Telegram': [{ json: { headers: {} } }] });
 assert.equal(rep.length, 0);
-console.log('✓ diagnóstico: informa ✔/✘ por servicio, detecta modelo de Grok inexistente');
+// Etapa 1: solo lo esencial cargado → lo opcional sale como ⏸ (pendiente), no como error
+const OPC = ['XAI_API_KEY', 'NTFY_URL', 'NTFY_TOKEN', 'RESEND_API_KEY', 'BRIEFING_EMAIL_FROM', 'BRIEFING_EMAIL_TO', 'GCAL_SYNC_SECRET', 'APP_URL'];
+const guard = Object.fromEntries(OPC.map((k) => [k, ENV[k]]));
+OPC.forEach((k) => delete ENV[k]);
+geminiScript = [() => txt('OK')];
+rep = await run(diag, [{ json: { error: { message: 'Credentials not found' } } }]);
+const est = Object.fromEntries(rep.map((r) => [r.json.servicio, r.json.estado]));
+assert.deepEqual(rep.filter((r) => r.json.estado === '✘').map((r) => r.json.servicio), []);
+assert.equal(est.Grok, '⏸'); assert.equal(est.Resend, '⏸'); assert.equal(est.ntfy, '⏸'); assert.equal(est['Google Calendar'], '⏸');
+assert.match(tgSent('sendMessage').at(-1).body.text, /pendientes \(opcionales\)/);
+Object.assign(ENV, guard);
+console.log('✓ diagnóstico: informa ✔/✘ por servicio, detecta modelo de Grok inexistente, etapa 1 sin errores');
 
 console.log('\nTodos los nodos OK');

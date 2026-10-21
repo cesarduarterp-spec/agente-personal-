@@ -34,6 +34,12 @@ No tengo acceso a tu servidor, a Coolify ni a tus cuentas. Desde acá tampoco ll
 
 ## 📋 Lo que tenés que hacer vos
 
+**Etapa 1 (lo esencial, ~40 min):** seguí [`docs/EMPEZAR.md`](EMPEZAR.md): bot de Telegram, clave de Gemini,
+Supabase, n8n en Coolify y probar con un audio. Lo opcional (Grok, email, ntfy, Calendar, app) puede quedar
+vacío: el diagnóstico lo muestra como ⏸ pendiente.
+
+**Etapa 2 (completo):**
+
 1. **Revisar el servidor** (Paso 0 de `docs/COOLIFY.md`) y, si querés, pasarme la lista de lo que corre.
 2. **Crear el bot** en Telegram con **@BotFather** y anotar tu número de **@userinfobot**.
 3. **Sacar las claves:** Gemini (aistudio.google.com), xAI (console.x.ai), Resend, y las de Supabase.

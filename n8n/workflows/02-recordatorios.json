@@ -69,8 +69,8 @@
           },
           "conditions": [
             {
-              "id": "e27978e5-af09-42ef-a10b-1b29fa49ca7e",
-              "leftValue": "={{ $json.priority }}",
+              "id": "ec3514d9-9dca-4fc4-a6c7-bab9bd950884",
+              "leftValue": "={{ $json.priority + ($env.NTFY_URL ? '' : '-sin-ntfy') }}",
               "rightValue": "alta",
               "operator": {
                 "type": "string",
