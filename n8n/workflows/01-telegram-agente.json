@@ -1,4 +1,5 @@
 {
+  "id": "asistTelegram001",
   "name": "01 · Telegram → Agente Gemini (voz y texto) + respaldo Grok",
   "nodes": [
     {

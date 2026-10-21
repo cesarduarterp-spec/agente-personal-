@@ -24,12 +24,13 @@ Telegram (voz/texto/botones) ──► n8n ──► Gemini 2.5 Flash (audio nat
 | 3 | Diseño de nodos n8n + JSON de las tools del agente + workflows importables | [`docs/n8n-design.md`](docs/n8n-design.md), [`n8n/tools/agent-tools.json`](n8n/tools/agent-tools.json), [`n8n/workflows/`](n8n/workflows/) |
 | 4 | PWA Next.js (App Router, Tailwind v4, estilo shadcn/ui, `manifest.json`, service worker) | [`web/`](web/) |
 
-Guía paso a paso de despliegue: **[`docs/SETUP.md`](docs/SETUP.md)**.
+Instalación en el VPS: `sudo bash scripts/instalar.sh` (automático) · guía completa: **[`docs/SETUP.md`](docs/SETUP.md)**.
 
 ## Estructura
 
 ```
 database/001_init.sql          esquema + lógica de negocio en SQL (idempotente)
+database/002_gcal_webhook.sql  trigger tareas → n8n (sync Google Calendar)
 infra/                         docker-compose.yml, Caddyfile, .env.example
 n8n/
   src/                         código de cada nodo Code (fuente de verdad)
@@ -37,6 +38,7 @@ n8n/
   prompts/system-prompt.md     prompt del agente
   workflows/                   JSON importables (generados)
 scripts/
+  instalar.sh                  instalador automático para el VPS
   build-n8n.mjs                genera los workflows y valida la sintaxis
   test-n8n-nodes.mjs           prueba los nodos contra Postgres real (Telegram/Gemini/Grok simulados)
 web/                           PWA Next.js (vistas Hoy / Semana / Mes)

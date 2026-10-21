@@ -1,5 +1,29 @@
 # Puesta en marcha (VPS Ubuntu + Docker)
 
+## ⚡ Opción rápida: instalador automático
+
+Con las claves a mano (tabla del §2) y el DNS creado (§1), en el VPS:
+
+```bash
+git clone -b claude/voice-first-executive-assistant-d4s640 \
+  https://github.com/cesarduarterp-spec/agente-personal-.git asistente
+cd asistente
+sudo bash scripts/instalar.sh
+```
+
+El script instala Docker, genera los secretos, te pide las claves y las valida, aplica la base de datos
+en Supabase (incluido el webhook hacia n8n de §8), te invita a la app, levanta los contenedores, crea el
+usuario de ntfy, importa y activa los workflows 01–03, conecta el bot y te manda un mensaje de prueba.
+Al final lista lo único que queda a mano: crear tu usuario de n8n, el *Site URL* de Supabase, la
+credencial de Google Calendar, verificar el dominio en Resend e instalar la app en el celular.
+Se puede volver a correr sin romper nada.
+
+La connection string de Supabase está en **Connect → Session pooler → URI** (reemplazá `[YOUR-PASSWORD]`).
+
+---
+
+## Opción manual
+
 ## 1. DNS
 Creá registros **A** apuntando a la IP del VPS:
 `n8n.midominio.com`, `ntfy.midominio.com`, `app.midominio.com`.
@@ -59,6 +83,7 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 ```
 
 ## 8. Database Webhook de Supabase (sync → Google Calendar)
+Más simple: correr `database/002_gcal_webhook.sql` con psql (ver el encabezado del archivo). O desde el panel (no hagas las dos cosas):
 Supabase → Database → Webhooks → *Create*:
 - Tabla `tasks`, eventos **Insert, Update, Delete**
 - Tipo HTTP POST → `https://n8n.midominio.com/webhook/gcal-sync`

@@ -92,7 +92,7 @@ const GCAL_AUTH = { authentication: 'predefinedCredentialType', nodeCredentialTy
 const GCAL_EVENTS = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
 
 /** connections: [[from, to, fromOutputIndex=0], ...] */
-function workflow(name, nodes, links, settings = {}) {
+function workflow(id, name, nodes, links, settings = {}) {
   const connections = {};
   for (const [from, to, out = 0] of links) {
     connections[from] ??= { main: [] };
@@ -101,6 +101,7 @@ function workflow(name, nodes, links, settings = {}) {
     main[out].push({ node: to, type: 'main', index: 0 });
   }
   return {
+    id, // fijo: permite activarlos por CLI (n8n publish:workflow --id=…)
     name,
     nodes,
     connections,
@@ -114,7 +115,7 @@ function workflow(name, nodes, links, settings = {}) {
 
 // ───────────── WF1 · Telegram → Agente Gemini ─────────────
 const W1 = 'wf1';
-const wf1 = workflow('01 · Telegram → Agente Gemini (voz y texto) + respaldo Grok', [
+const wf1 = workflow('asistTelegram001', '01 · Telegram → Agente Gemini (voz y texto) + respaldo Grok', [
   webhook(W1, 'Telegram Webhook', [0, 300], 'telegram'),
   code(W1, 'Validar y normalizar', [220, 300], 'src/telegram/validar.js', 'Secret header + chat autorizado'),
   switchOn(W1, 'Tipo de entrada', [440, 300], 'kind', ['voice', 'text', 'callback']),
@@ -157,7 +158,7 @@ const wf1 = workflow('01 · Telegram → Agente Gemini (voz y texto) + respaldo 
 
 // ───────────── WF2 · Recordatorios cada 5 min ─────────────
 const W2 = 'wf2';
-const wf2 = workflow('02 · Motor de recordatorios (cada 5 min)', [
+const wf2 = workflow('asistRecordat002', '02 · Motor de recordatorios (cada 5 min)', [
   schedule(W2, 'Cada 5 minutos', [0, 300], { field: 'minutes', minutesInterval: 5 }),
   code(W2, 'Reclamar recordatorios (RPC)', [220, 300], 'src/recordatorios/reclamar.js', 'Marca reminder_sent=true atómicamente'),
   code(W2, 'Telegram + botones', [440, 300], 'src/recordatorios/enviar.js'),
@@ -185,7 +186,7 @@ const wf2 = workflow('02 · Motor de recordatorios (cada 5 min)', [
 
 // ───────────── WF3 · Briefing matutino ─────────────
 const W3 = 'wf3';
-const wf3 = workflow('03 · Briefing matutino 08:00', [
+const wf3 = workflow('asistBriefing003', '03 · Briefing matutino 08:00', [
   schedule(W3, 'Todos los días 08:00', [0, 300], { field: 'cronExpression', expression: '0 8 * * *' }),
   httpReq(W3, 'Supabase · fn_briefing', [220, 300], {
     method: 'POST',
@@ -217,7 +218,7 @@ const wf3 = workflow('03 · Briefing matutino 08:00', [
 
 // ───────────── WF4 · Google Calendar ⇄ Tareas ─────────────
 const W4 = 'wf4';
-const wf4 = workflow('04 · Sincronización Google Calendar ⇄ Tareas', [
+const wf4 = workflow('asistGcalSync004', '04 · Sincronización Google Calendar ⇄ Tareas', [
   // A) Tareas → Calendar (Database Webhook de Supabase)
   webhook(W4, 'Supabase DB Webhook', [0, 200], 'gcal-sync'),
   code(W4, 'Filtrar cambios', [220, 200], 'src/gcal/filtrar-cambios.js', 'Ignora cambios de gcal/system (anti-bucle)'),
