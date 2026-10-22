@@ -75,7 +75,7 @@ function taskKeyboard(id) {
   };
 }
 
-async function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-2.5-flash') {
+async function gemini(body, model = ENV.GEMINI_MODEL || 'gemini-flash-latest') {
   return http({
     method: 'POST',
     url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,

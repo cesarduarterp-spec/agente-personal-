@@ -35,7 +35,7 @@ Caddy emite los certificados SSL solo (puertos 80/443 abiertos en el firewall).
 | Servicio | Qué necesitás |
 |---|---|
 | Telegram | Bot con **@BotFather** → token. Tu `chat_id`: escribile a **@userinfobot**. |
-| Gemini | API key en Google AI Studio (modelo `gemini-2.5-flash`). |
+| Gemini | API key en Google AI Studio (modelo `gemini-flash-latest`). |
 | xAI (Grok) | API key en console.x.ai — respaldo si Gemini falla. |
 | Supabase | URL, `anon` key y `service_role` key (Project Settings → API). |
 | Resend | API key y un dominio verificado para el remitente. |

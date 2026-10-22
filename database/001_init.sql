@@ -580,3 +580,15 @@ end $$;
 --  7. DATOS INICIALES — reemplazá por tu email (el mismo con el que entrás a la PWA)
 -- =============================================================================
 -- insert into public.app_users (email) values ('tu-email@dominio.com') on conflict do nothing;
+
+-- =============================================================================
+--  8. PERMISOS DATA API (proyectos Supabase nuevos ya no los dan solos)
+-- =============================================================================
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables    in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+grant execute on all functions in schema public to service_role;
+grant select, update on public.tasks to authenticated;
+grant execute on function public.task_json(public.tasks) to authenticated;
+grant execute on function public.app_tz() to authenticated;
+notify pgrst, 'reload schema';

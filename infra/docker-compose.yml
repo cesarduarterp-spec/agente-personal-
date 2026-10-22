@@ -86,7 +86,7 @@ services:
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
       TELEGRAM_ALLOWED_CHAT_ID: ${TELEGRAM_ALLOWED_CHAT_ID}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-latest}
       XAI_API_KEY: ${XAI_API_KEY}            # respaldo Grok (si falla Gemini)
       GROK_MODEL: ${GROK_MODEL:-grok-4.3}
       FORZAR_GROK: ${FORZAR_GROK:-false}

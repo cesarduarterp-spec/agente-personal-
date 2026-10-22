@@ -53,7 +53,7 @@ try {
       contents,
       tools: [{ functionDeclarations: TOOLS }],
       toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
-      generationConfig: { temperature: 0.3 },
+      // Sin temperature: los modelos Gemini 3 recomiendan el valor por defecto
     });
 
     const candidate = res?.candidates?.[0];

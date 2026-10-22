@@ -21,6 +21,14 @@ Rama: `claude/voice-first-executive-assistant-d4s640` · Última revisión: adap
 | **iPhone** | La vibración no existe en Safari: ya no se intenta y aparece un aviso visual ("✓ Completada", "📅 Pasada a mañana") | Probado simulando un iPhone sin vibración |
 | **Seguridad** | Ninguna clave en el código ni en el historial. `.env` y variantes (`.env.local`, etc.) ignorados. | Revisión del repo completo |
 
+## 🔧 Primera instalación real (21/10)
+
+- ✔ Coolify: n8n desplegado en `n8n.wameta.app`; Telegram conectado (`@cesar2801bot`), zona horaria OK.
+- ✘→🔧 **Gemini 404**: `gemini-2.5-flash` ya no se ofrece a proyectos nuevos. Ahora el modelo por defecto es
+  `gemini-flash-latest` (variable `GEMINI_MODEL`).
+- ✘→🔧 **Supabase 404**: los proyectos nuevos no exponen funciones sin permisos explícitos. Nuevo archivo
+  `database/003_permisos_api.sql` (y los mismos permisos al final de `001_init.sql`).
+
 ## ⚠️ No probado todavía
 
 No tengo acceso a tu servidor, a Coolify ni a tus cuentas. Desde acá tampoco llego a la API de xAI.

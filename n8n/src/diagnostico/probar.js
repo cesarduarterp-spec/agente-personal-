@@ -58,7 +58,7 @@ await check('Telegram', async () => {
 
 // 3) Gemini
 await check('Gemini', async () => {
-  const model = ENV.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = ENV.GEMINI_MODEL || 'gemini-flash-latest';
   const res = await gemini({ contents: [{ role: 'user', parts: [{ text: 'Respondé solo: OK' }] }] }, model);
   add(geminiText(res) ? '✔' : '⚠', 'Gemini', `${model} respondió "${geminiText(res).slice(0, 20)}"`);
 });

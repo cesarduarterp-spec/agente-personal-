@@ -20,7 +20,9 @@ Son 6 pasos. Hacé uno por vez y, si algo no coincide con lo que ves, mandá una
 ### Paso 3 · Supabase (5 min)
 1. En GitHub abrí el archivo `database/001_init.sql` → botón **Copy raw file** (ícono de copiar).
 2. En Supabase → **SQL Editor** → **New query** → pegá → **Run**. Tiene que decir *Success*.
-3. En Supabase → **Project Settings → API**: copiá la **Project URL** y la clave **service_role**.
+3. Hacé lo mismo con `database/003_permisos_api.sql` (los proyectos nuevos de Supabase vienen cerrados:
+   este archivo le da permiso a n8n para usar la agenda). Tiene que decir *Permisos de la Data API listos*.
+4. En Supabase → **Project Settings → API**: copiá la **Project URL** y la clave **service_role**.
 
 ### Paso 4 · Subdominio (2 min)
 En el panel de tu dominio creá un registro **A**: `n8n` → la IP de tu servidor.
@@ -40,6 +42,7 @@ En el panel de tu dominio creá un registro **A**: `n8n` → la IP de tu servido
 | `TELEGRAM_BOT_TOKEN` | el token del paso 1 |
 | `TELEGRAM_ALLOWED_CHAT_ID` | tu Id del paso 1 |
 | `GEMINI_API_KEY` | la clave del paso 2 |
+| `GEMINI_MODEL` | `gemini-flash-latest` (si el diagnóstico da 404 en Gemini, probá `gemini-3.5-flash`) |
 | `SUPABASE_URL` | la Project URL del paso 3 |
 | `SUPABASE_SERVICE_ROLE_KEY` | la clave service_role del paso 3 |
 
