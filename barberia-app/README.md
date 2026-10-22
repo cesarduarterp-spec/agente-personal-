@@ -13,7 +13,7 @@ barberia-app/
 ## Estado
 - [x] Esquema multi-barbería con anti doble-reserva (constraint de exclusión), gestión por token, reclamo atómico de recordatorios
 - [x] Login de barberos: mail + contraseña (con verificación), Google, recuperar contraseña
-- [ ] Onboarding (modo local / domicilio, servicios, horarios)
+- [x] Onboarding (modo local / domicilio, servicios, horarios, autocompletado de Google Maps)
 - [ ] Reserva rápida del cliente + Turnstile + Google Maps
 - [ ] Ficha de clientes con fotos
 - [ ] Workflows n8n + mails (Resend)
