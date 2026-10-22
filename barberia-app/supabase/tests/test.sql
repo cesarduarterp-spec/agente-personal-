@@ -105,3 +105,39 @@ select (ver_turno(:'tok2')->>'puede_modificar')::boolean = false as no_modificab
 select pg_temp.expect_error(format($q$select cancelar_turno('%s')$q$, :'tok2'), 'fuera_de_plazo');
 reset role;
 \echo === GESTION OK ===
+
+-- 8. fichas numeradas y horarios atómicos
+select array_agg(numero order by numero) = array[1,2] as fichas_numeradas from clientes where barberia_id = :'barberia';
+update clientes set numero = 99 where email = 'pedro@x.com';
+select numero = 1 as numero_inmutable from clientes where email = 'pedro@x.com';
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into clientes (barberia_id, nombre, numero) values (:'barberia', 'Ana', 500);
+update barberias set siguiente_ficha = 1 where id = :'barberia';
+insert into clientes (barberia_id, nombre) values (:'barberia', 'Beto');
+select string_agg(nombre || '#' || numero, ',' order by numero) as fichas from clientes;
+select pg_temp.expect_error(format($q$select guardar_horarios('%s', '[{"dia_semana":1,"desde":"09:00","hasta":"13:00"},{"dia_semana":1,"desde":"12:00","hasta":"18:00"}]')$q$, :'barbero'), 'horarios_superpuestos');
+select count(*) = 7 as horarios_intactos_tras_error from horarios where barbero_id = :'barbero';
+select guardar_horarios(:'barbero', '[{"dia_semana":1,"desde":"09:00","hasta":"13:00"},{"dia_semana":1,"desde":"15:00","hasta":"19:00"}]');
+select count(*) = 2 as horarios_reemplazados from horarios where barbero_id = :'barbero';
+reset role;
+set request.jwt.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select pg_temp.expect_error(format($q$select guardar_horarios('%s', '[{"dia_semana":2,"desde":"09:00","hasta":"10:00"}]')$q$, :'barbero'), 'row-level security');
+reset role;
+\echo === FICHAS OK ===
+
+-- 9. bloqueos: un día bloqueado no ofrece horarios y avisa de turnos ya reservados
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select guardar_horarios(:'barbero', '[{"dia_semana":0,"desde":"09:00","hasta":"18:00"},{"dia_semana":1,"desde":"09:00","hasta":"18:00"},{"dia_semana":2,"desde":"09:00","hasta":"18:00"},{"dia_semana":3,"desde":"09:00","hasta":"18:00"},{"dia_semana":4,"desde":"09:00","hasta":"18:00"},{"dia_semana":5,"desde":"09:00","hasta":"18:00"},{"dia_semana":6,"desde":"09:00","hasta":"18:00"}]');
+select count(*) > 0 as dia_con_horarios from disponibilidad('juan-barber', :'barbero', :'servicio', :'dia'::date);
+select bloquear_dias(:'barbero', :'dia'::date, :'dia'::date, null, null, 'vacaciones') as turnos_en_conflicto;
+select count(*) = 0 as dia_bloqueado_sin_horarios from disponibilidad('juan-barber', :'barbero', :'servicio', :'dia'::date);
+select pg_temp.expect_error(format($q$select bloquear_dias('%s', '%s', '%s')$q$, :'barbero', :'dia', ('2000-01-01')), 'rango_invalido');
+reset role;
+set request.jwt.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select pg_temp.expect_error(format($q$select bloquear_dias('%s', '%s', '%s')$q$, :'barbero', :'dia', :'dia'), 'barbero_no_existe');
+reset role;
+\echo === BLOQUEOS OK ===

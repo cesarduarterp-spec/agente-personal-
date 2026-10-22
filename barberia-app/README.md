@@ -15,7 +15,9 @@ barberia-app/
 - [x] Login de barberos: mail + contraseña (con verificación), Google, recuperar contraseña
 - [x] Onboarding (modo local / domicilio, servicios, horarios, autocompletado de Google Maps)
 - [x] Reserva rápida del cliente sin cuenta (`/<slug>`), Turnstile, Google Maps, gestión por link (`/turno/<token>`), mails de confirmación con .ics
-- [ ] Ficha de clientes con fotos
+- [x] Fichas de clientes: se crean solas con los datos del turno, n° de ficha correlativo, buscador, orden alfabético por nombre, observaciones, historial de cortes con fotos
+- [x] Horarios: días y franjas que habilita el barbero, intervalo entre turnos, días libres y vacaciones
+- [ ] Edición de servicios / banner de promo / datos de la barbería
 - [ ] Workflows n8n + mails (Resend)
 
 ## Modelo de seguridad
@@ -28,13 +30,13 @@ barberia-app/
 ## Probar el esquema localmente
 Requiere un Postgres 14+ (sin Supabase):
 ```bash
-createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql
+createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql
 psql -d t -f supabase/tests/test.sql      # termina en "=== TODO OK ==="
 ```
 Revisá que todas las columnas booleanas del resultado sean `t`.
 
 ## Puesta en marcha (cuentas tuyas)
-1. **Supabase**: crear el proyecto y ejecutar `0001_init.sql` en el SQL Editor.
+1. **Supabase**: crear el proyecto y ejecutar `0001_init.sql` y después `0002_fichas_horarios.sql` en el SQL Editor.
    - Authentication → Providers: activar **Email** (con *Confirm email*) y **Google**.
    - Authentication → URL Configuration: *Site URL* = tu dominio; *Redirect URLs* = `https://tudominio.com/auth/callback` (y `http://localhost:3000/auth/callback` para desarrollo).
 2. **Google Cloud**:
