@@ -21,6 +21,11 @@ Rama: `claude/voice-first-executive-assistant-d4s640` · Última revisión: adap
 | **iPhone** | La vibración no existe en Safari: ya no se intenta y aparece un aviso visual ("✓ Completada", "📅 Pasada a mañana") | Probado simulando un iPhone sin vibración |
 | **Seguridad** | Ninguna clave en el código ni en el historial. `.env` y variantes (`.env.local`, etc.) ignorados. | Revisión del repo completo |
 
+## 🟢 Etapa 1 funcionando (21/10)
+
+Primera tarea real creada por Telegram: *"Mañana a las 10 llamar al proveedor de hormigón, es urgente"* →
+**jue 22/10 10:00 · alta · #Constructora**, con los botones ✅ / ⏳ / 📅. Diagnóstico 5/5 OK.
+
 ## 🔧 Primera instalación real (21/10)
 
 - ✔ Coolify: n8n desplegado en `n8n.wameta.app`; Telegram conectado (`@cesar2801bot`), zona horaria OK.
