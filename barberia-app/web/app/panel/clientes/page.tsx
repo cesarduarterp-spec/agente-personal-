@@ -9,21 +9,10 @@ export default async function Clientes({ searchParams }: PageProps<"/panel/clien
   const { supabase } = await cargarPanel();
   const q = String((await searchParams).q ?? "").trim();
 
-  let consulta = supabase.from("clientes").select("id, numero, nombre, apellido, telefono, email").limit(500);
-  if (q) {
-    // se quitan los caracteres con significado especial en los filtros de PostgREST
-    const t = q.replace(/[,()%*\\"]/g, " ").trim();
-    const filtros = [`nombre.ilike.%${t}%`, `apellido.ilike.%${t}%`, `email.ilike.%${t}%`, `telefono.ilike.%${t}%`];
-    if (/^#?\d+$/.test(t)) filtros.push(`numero.eq.${t.replace("#", "")}`);
-    consulta = consulta.or(filtros.join(","));
-  }
-  const { data } = await consulta;
-  // orden alfabético por primer nombre, respetando tildes y la ñ
-  const fichas = ((data ?? []) as Ficha[]).sort(
-    (a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }) ||
-      (a.apellido ?? "").localeCompare(b.apellido ?? "", "es", { sensitivity: "base" }),
-  );
-  const letras = Map.groupBy(fichas, (f) => (f.nombre.trim()[0] ?? "#").toLocaleUpperCase("es"));
+  // búsqueda y orden alfabético (por primer nombre, sin distinguir tildes) los resuelve la base
+  const { data } = await supabase.rpc("buscar_clientes", { p_q: q, p_limite: 500 });
+  const fichas = (data ?? []) as Ficha[];
+  const letras = Map.groupBy(fichas, (f) => (f.nombre.trim()[0] ?? "#").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleUpperCase("es"));
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">

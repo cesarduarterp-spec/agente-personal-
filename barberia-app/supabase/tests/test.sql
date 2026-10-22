@@ -141,3 +141,50 @@ set role authenticated;
 select pg_temp.expect_error(format($q$select bloquear_dias('%s', '%s', '%s')$q$, :'barbero', :'dia', :'dia'), 'barbero_no_existe');
 reset role;
 \echo === BLOQUEOS OK ===
+
+-- 10. búsqueda de fichas: nombre+apellido, sin tildes, por n° y orden alfabético
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into clientes (barberia_id, nombre, apellido, telefono) values
+  (:'barberia', 'Juan', 'Pérez', '11 4444-0000'), (:'barberia', 'Álvaro', 'Núñez', null), (:'barberia', 'Zoe', 'Pérez', null);
+select count(*) = 1 as busca_nombre_y_apellido from buscar_clientes('juan perez');
+select count(*) = 1 as busca_con_mayusculas from buscar_clientes('JUAN PÉ');
+select count(*) = 2 as busca_solo_apellido from buscar_clientes('perez');
+select count(*) = 1 as busca_sin_tilde from buscar_clientes('nunez');
+select count(*) = 1 as busca_por_telefono from buscar_clientes('4444');
+select (select count(*) from buscar_clientes('#' || (select numero from clientes where nombre = 'Zoe'))) >= 1 as busca_por_numero;
+select count(*) = 0 as sin_resultados from buscar_clientes('nadie zzz');
+select count(*) = 0 as comodin_escapado from buscar_clientes('%');
+select array_agg(nombre order by ord) = array['Álvaro','Ana','Beto','Cerca','Juan','Pedro (editado)','Zoe'] as orden_alfabetico
+  from (select nombre, row_number() over () ord from buscar_clientes('')) z;
+reset role;
+set request.jwt.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select count(*) = 0 as busqueda_aislada_por_barberia from buscar_clientes('');
+reset role;
+
+-- 11. la ficha se completa con los datos del turno; no se duplican fichas cargadas a mano
+select (:'dia'::date + 5 + time '12:00') at time zone 'America/Argentina/Buenos_Aires' as r12 \gset
+select (:'dia'::date + 5 + time '12:30') at time zone 'America/Argentina/Buenos_Aires' as r1230 \gset
+select (:'dia'::date + 5 + time '13:00') at time zone 'America/Argentina/Buenos_Aires' as r13 \gset
+select (:'dia'::date + 5 + time '13:30') at time zone 'America/Argentina/Buenos_Aires' as r1330 \gset
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into clientes (barberia_id, nombre, apellido, telefono) values (:'barberia', 'Luis', 'Rojas', '11 5555-1234');
+insert into clientes (barberia_id, nombre, email, observaciones) values (:'barberia', 'Mara', 'mara@x.com', 'nota del barbero');
+reset role;
+select count(*) as fichas_antes from clientes where barberia_id = :'barberia' \gset
+set role service_role;
+-- Luis reserva online con su teléfono en otro formato y un mail: es la misma ficha
+select crear_reserva('juan-barber', :'barbero', :'servicio', :'r12', 'local', 'Luis','Rojas','+54 9 11 5555 1234','Luis@X.com',null,null,null,null,true) is not null as reserva_luis;
+-- Mara (con mail) reserva a domicilio: se completa teléfono y dirección, no se pisa nada
+select crear_reserva('juan-barber', :'barbero', :'servicio', :'r1230', 'domicilio', 'MARA CAMBIADA','Gomez','11 2222-3333','mara@x.com','Cerca 2',-34.61,-58.39,null,true) is not null as reserva_mara;
+-- alguien con el mismo teléfono pero OTRO mail no secuestra la ficha de Luis (ya tiene mail)
+select crear_reserva('juan-barber', :'barbero', :'servicio', :'r1330', 'local', 'Impostor','X','1155551234','impostor@x.com',null,null,null,null,true) is not null as reserva_impostor;
+reset role;
+select count(*) = :fichas_antes + 1 as solo_una_ficha_nueva from clientes where barberia_id = :'barberia';
+select email = 'luis@x.com' and nombre = 'Luis' as luis_reutilizada from clientes where telefono = '11 5555-1234';
+select nombre = 'Mara' and telefono = '11 2222-3333' and apellido = 'Gomez' and direccion = 'Cerca 2' and observaciones = 'nota del barbero' as mara_completada_sin_pisar
+  from clientes where email = 'mara@x.com';
+select count(*) = 1 as impostor_tiene_su_ficha from clientes where email = 'impostor@x.com' and nombre = 'Impostor';
+\echo === BUSQUEDA OK ===

@@ -19,13 +19,13 @@ async function comprimir(file: File): Promise<Blob> {
 }
 
 export default function CorteForm({
-  barberiaId, clienteId, servicios, hoy,
-}: { barberiaId: string; clienteId: string; servicios: string[]; hoy: string }) {
+  barberiaId, clienteId, servicios, hoy, turnoId, servicioInicial = "", precioInicial = "",
+}: { barberiaId: string; clienteId: string; servicios: string[]; hoy: string; turnoId?: string; servicioInicial?: string; precioInicial?: string }) {
   const router = useRouter();
   const [fecha, setFecha] = useState(hoy);
-  const [servicio, setServicio] = useState("");
+  const [servicio, setServicio] = useState(servicioInicial);
   const [nota, setNota] = useState("");
-  const [precio, setPrecio] = useState("");
+  const [precio, setPrecio] = useState(precioInicial);
   const [archivos, setArchivos] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pendiente, iniciar] = useTransition();
@@ -48,13 +48,14 @@ export default function CorteForm({
         if (rutas.length) await supabase.storage.from("cortes").remove(rutas);
         return setError("No pudimos subir las fotos. Probá de nuevo.");
       }
-      const r = await guardarCorte(clienteId, { fecha, servicio, nota, precio, fotos: rutas });
+      const r = await guardarCorte(clienteId, { fecha, servicio, nota, precio, fotos: rutas, turnoId });
       if (!r.ok) {
         if (rutas.length) await supabase.storage.from("cortes").remove(rutas);
         return setError(r.error);
       }
       form.reset();
       setServicio(""); setNota(""); setPrecio(""); setArchivos([]);
+      if (turnoId) router.replace(`/panel/clientes/${clienteId}`);
       router.refresh();
     });
   }

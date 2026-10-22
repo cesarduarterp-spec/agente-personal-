@@ -30,13 +30,12 @@ barberia-app/
 ## Probar el esquema localmente
 Requiere un Postgres 14+ (sin Supabase):
 ```bash
-createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql
-psql -d t -f supabase/tests/test.sql      # termina en "=== TODO OK ==="
+createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql
+psql -d t -At -v ON_ERROR_STOP=1 -f supabase/tests/test.sql | grep -c "^f$"   # debe dar 0 (y verás los "=== ... OK ===")
 ```
-Revisá que todas las columnas booleanas del resultado sean `t`.
 
 ## Puesta en marcha (cuentas tuyas)
-1. **Supabase**: crear el proyecto y ejecutar `0001_init.sql` y después `0002_fichas_horarios.sql` en el SQL Editor.
+1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`.
    - Authentication → Providers: activar **Email** (con *Confirm email*) y **Google**.
    - Authentication → URL Configuration: *Site URL* = tu dominio; *Redirect URLs* = `https://tudominio.com/auth/callback` (y `http://localhost:3000/auth/callback` para desarrollo).
 2. **Google Cloud**:

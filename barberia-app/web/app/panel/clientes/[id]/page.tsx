@@ -8,10 +8,11 @@ import BorrarCorte from "../BorrarCorte";
 export const dynamic = "force-dynamic";
 
 type Corte = { id: string; fecha: string; servicio: string | null; nota: string | null; precio: number | null; fotos: string[] };
-type TurnoFila = { id: string; inicio: string; estado: string; modalidad: string; servicios: { nombre: string } | null };
+type TurnoFila = { id: string; inicio: string; estado: string; modalidad: string; precio: number | null; servicios: { nombre: string } | null };
 
-export default async function Ficha({ params }: PageProps<"/panel/clientes/[id]">) {
+export default async function Ficha({ params, searchParams }: PageProps<"/panel/clientes/[id]">) {
   const { id } = await params;
+  const turnoParam = String((await searchParams).turno ?? "");
   const { supabase, barberia } = await cargarPanel();
 
   const { data: c } = await supabase.from("clientes").select("*").eq("id", id).maybeSingle();
@@ -19,7 +20,7 @@ export default async function Ficha({ params }: PageProps<"/panel/clientes/[id]"
 
   const [{ data: cortesData }, { data: turnosData }, { data: servs }] = await Promise.all([
     supabase.from("cortes").select("id, fecha, servicio, nota, precio, fotos").eq("cliente_id", id).order("fecha", { ascending: false }).order("created_at", { ascending: false }),
-    supabase.from("turnos").select("id, inicio, estado, modalidad, servicios(nombre)").eq("cliente_id", id).order("inicio", { ascending: false }).limit(15),
+    supabase.from("turnos").select("id, inicio, estado, modalidad, precio, servicios(nombre)").eq("cliente_id", id).order("inicio", { ascending: false }).limit(15),
     supabase.from("servicios").select("nombre").eq("activo", true),
   ]);
   const cortes = (cortesData ?? []) as Corte[];
@@ -36,6 +37,8 @@ export default async function Ficha({ params }: PageProps<"/panel/clientes/[id]"
   const tz = barberia.timezone;
   const fecha = new Intl.DateTimeFormat("es-AR", { timeZone: tz, dateStyle: "medium", timeStyle: "short" });
   const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+  const turnoElegido = turnos.find((t) => t.id === turnoParam && t.estado === "confirmado");
+  const fechaTurno = turnoElegido ? new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(turnoElegido.inicio)) : hoy;
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-4 py-8">
@@ -52,7 +55,8 @@ export default async function Ficha({ params }: PageProps<"/panel/clientes/[id]"
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-medium">Cortes</h2>
-        <CorteForm barberiaId={barberia.id} clienteId={c.id} servicios={(servs ?? []).map((s) => s.nombre)} hoy={hoy} />
+        <CorteForm key={turnoElegido?.id ?? "libre"} barberiaId={barberia.id} clienteId={c.id} servicios={(servs ?? []).map((s) => s.nombre)} hoy={fechaTurno}
+          turnoId={turnoElegido?.id} servicioInicial={turnoElegido?.servicios?.nombre ?? ""} precioInicial={turnoElegido?.precio?.toString() ?? ""} />
         {cortes.length === 0 && <p className="text-zinc-600 dark:text-zinc-400">Todavía no hay cortes registrados.</p>}
         {cortes.map((x) => (
           <article key={x.id} className="rounded-lg border border-zinc-300 p-4 dark:border-zinc-700">
@@ -80,6 +84,7 @@ export default async function Ficha({ params }: PageProps<"/panel/clientes/[id]"
           <p key={t.id} className="text-sm">
             {fecha.format(new Date(t.inicio))} · {t.servicios?.nombre} · {t.modalidad === "local" ? "local" : "domicilio"}
             {t.estado !== "confirmado" && <span className="text-zinc-500"> ({t.estado})</span>}
+            {t.estado === "confirmado" && <> · <Link className="underline" href={`/panel/clientes/${c.id}?turno=${t.id}`}>Registrar corte</Link></>}
           </p>
         ))}
       </section>

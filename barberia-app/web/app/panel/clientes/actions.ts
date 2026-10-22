@@ -42,7 +42,7 @@ export async function guardarCliente(id: string | null, i: ClienteInput): Promis
   return { ok: true, id: data.id };
 }
 
-export type CorteInput = { fecha: string; servicio: string; nota: string; precio: string; fotos: string[] };
+export type CorteInput = { fecha: string; servicio: string; nota: string; precio: string; fotos: string[]; turnoId?: string };
 
 export async function guardarCorte(clienteId: string, i: CorteInput): Promise<Resultado> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(i.fecha)) return { ok: false, error: "Elegí la fecha del corte." };
@@ -56,11 +56,18 @@ export async function guardarCorte(clienteId: string, i: CorteInput): Promise<Re
   const prefijo = `${c.barberia_id}/${clienteId}/`;
   if (i.fotos.some((p) => !p.startsWith(prefijo) || p.includes(".."))) return { ok: false, error: "Foto inválida." };
 
+  if (i.turnoId) {
+    const { data: t } = await supabase.from("turnos").select("id").eq("id", i.turnoId).eq("cliente_id", clienteId).maybeSingle();
+    if (!t) return { ok: false, error: "No encontramos ese turno." };
+  }
+
   const { error } = await supabase.from("cortes").insert({
-    barberia_id: c.barberia_id, cliente_id: clienteId, fecha: i.fecha,
+    barberia_id: c.barberia_id, cliente_id: clienteId, turno_id: i.turnoId ?? null, fecha: i.fecha,
     servicio: vacio(i.servicio), nota: vacio(i.nota), precio, fotos: i.fotos,
   });
   if (error) return { ok: false, error: "No pudimos guardar el corte." };
+  // registrar el corte de un turno lo marca como realizado
+  if (i.turnoId) await supabase.from("turnos").update({ estado: "completado" }).eq("id", i.turnoId).eq("estado", "confirmado");
   revalidatePath(`/panel/clientes/${clienteId}`);
   return { ok: true };
 }
