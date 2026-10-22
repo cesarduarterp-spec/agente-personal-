@@ -90,3 +90,18 @@ select count(*) as reclamados_1 from reclamar_recordatorios('24h');
 select count(*) as reclamados_2 from reclamar_recordatorios('24h');
 reset role;
 \echo === TODO OK ===
+
+-- 7. gestión por token: ver, reprogramar (respeta ocupados y plazo), cancelar
+update turnos set inicio = now() + interval '48 hours' where estado='confirmado' and modalidad='local' and cliente_id = (select id from clientes where email='pedro@x.com');
+select gestion_token as tok2 from turnos where estado='confirmado' and cliente_id = (select id from clientes where email='pedro@x.com') limit 1 \gset
+set role anon;
+select (ver_turno(:'tok2')->>'puede_modificar')::boolean as puede_modificar_48h;
+select pg_temp.expect_error(format($q$select reprogramar_turno('%s', '%s')$q$, :'tok2', :'t14'), 'horario_no_disponible');
+select (reprogramar_turno(:'tok2', :'t1030'::timestamptz + interval '2 days') ->> 'ok')::boolean as reprogramado;
+reset role;
+update turnos set inicio = now() + interval '1 hour' where gestion_token = :'tok2';
+set role anon;
+select (ver_turno(:'tok2')->>'puede_modificar')::boolean = false as no_modificable_1h;
+select pg_temp.expect_error(format($q$select cancelar_turno('%s')$q$, :'tok2'), 'fuera_de_plazo');
+reset role;
+\echo === GESTION OK ===

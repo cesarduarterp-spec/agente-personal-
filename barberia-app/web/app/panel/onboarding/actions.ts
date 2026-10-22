@@ -19,6 +19,7 @@ export type OnboardingInput = {
 
 export type OnboardingResult = { ok: true; slug: string } | { ok: false; error: string };
 
+const RESERVADOS = new Set(["ingresar", "panel", "auth", "turno", "api", "admin", "login", "registro"]);
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export async function crearBarberia(input: OnboardingInput): Promise<OnboardingResult> {
@@ -27,6 +28,7 @@ export async function crearBarberia(input: OnboardingInput): Promise<OnboardingR
   if (!nombre) return { ok: false, error: "Poné el nombre de tu barbería." };
   if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug))
     return { ok: false, error: "El link debe tener 3 a 40 letras minúsculas, números o guiones." };
+  if (RESERVADOS.has(slug)) return { ok: false, error: "Ese link está reservado, probá con otro." };
   if (!["local", "domicilio", "ambos"].includes(input.modo)) return { ok: false, error: "Elegí tu modo de trabajo." };
   const conLocal = input.modo !== "domicilio";
   const conDomicilio = input.modo !== "local";
