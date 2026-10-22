@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { bloquear, guardarHorarios, quitarBloqueo, type Rango } from "./actions";
+import { abrirFecha, bloquear, guardarHorarios, quitarApertura, quitarBloqueo, type Rango } from "./actions";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const ORDEN = [1, 2, 3, 4, 5, 6, 0]; // semana que empieza el lunes
@@ -13,9 +13,10 @@ type Props = {
   barberos: { id: string; nombre: string }[];
   horarios: (Rango & { barbero_id: string })[];
   bloqueos: { id: string; barbero_id: string; inicio: string; fin: string; motivo: string | null }[];
+  aperturas: { id: string; barbero_id: string; inicio: string; fin: string; motivo: string | null }[];
 };
 
-export default function Editor({ barberiaId, timezone, pasoMin, barberos, horarios, bloqueos }: Props) {
+export default function Editor({ barberiaId, timezone, pasoMin, barberos, horarios, bloqueos, aperturas }: Props) {
   const router = useRouter();
   const [barbero, setBarbero] = useState(barberos[0]?.id ?? "");
   // franjas por barbero, editables; se guardan juntas con el botón
@@ -68,6 +69,25 @@ export default function Editor({ barberiaId, timezone, pasoMin, barberos, horari
     });
   }
 
+  // --- aperturas (fechas extra fuera del horario semanal)
+  const [aFecha, setAFecha] = useState("");
+  const [aDesde, setADesde] = useState("10:00");
+  const [aHasta, setAHasta] = useState("14:00");
+  const [aMotivo, setAMotivo] = useState("");
+  const [msgA, setMsgA] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  function agregarApertura(e: React.FormEvent) {
+    e.preventDefault();
+    setMsgA(null);
+    iniciar(async () => {
+      const r = await abrirFecha(barbero, aFecha, aDesde, aHasta, aMotivo);
+      if (!r.ok) return setMsgA({ ok: false, texto: r.error });
+      setMsgA({ ok: true, texto: r.bloqueos ? "Fecha abierta, pero se superpone con un bloqueo: mientras esté el bloqueo, esos horarios siguen cerrados. Quitalo más abajo." : "Fecha abierta: los clientes ya pueden reservar." });
+      setAFecha(""); setAMotivo("");
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex flex-col gap-10">
       {barberos.length > 1 && (
@@ -115,6 +135,28 @@ export default function Editor({ barberiaId, timezone, pasoMin, barberos, horari
           className="rounded-lg bg-zinc-900 px-4 py-3 font-medium text-white disabled:opacity-60 dark:bg-white dark:text-zinc-900">
           {pendiente ? "Guardando…" : "Guardar horarios"}
         </button>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium">Abrir una fecha especial</h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">Para atender un día que normalmente no trabajás (ej: un domingo extra).</p>
+        <form onSubmit={agregarApertura} className="flex flex-col gap-3 rounded-lg border border-zinc-300 p-4 dark:border-zinc-700">
+          <div className="grid grid-cols-3 gap-3">
+            <label className="flex flex-col text-sm">Fecha<input type="date" required value={aFecha} onChange={(e) => setAFecha(e.target.value)} className={campo} /></label>
+            <label className="flex flex-col text-sm">Desde<input type="time" required value={aDesde} onChange={(e) => setADesde(e.target.value)} className={campo} /></label>
+            <label className="flex flex-col text-sm">Hasta<input type="time" required value={aHasta} onChange={(e) => setAHasta(e.target.value)} className={campo} /></label>
+          </div>
+          <input placeholder="Motivo (opcional)" value={aMotivo} onChange={(e) => setAMotivo(e.target.value)} className={campo} />
+          {msgA && <p role="status" className={msgA.ok ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}>{msgA.texto}</p>}
+          <button disabled={pendiente || !barbero} className="rounded-lg border border-zinc-300 px-4 py-2 dark:border-zinc-700">Abrir fecha</button>
+        </form>
+        {aperturas.filter((a) => a.barbero_id === barbero).map((a) => (
+          <div key={a.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-300 p-3 text-sm dark:border-zinc-700">
+            <span>{fmt.format(new Date(a.inicio))} → {new Intl.DateTimeFormat("es-AR", { timeZone: timezone, timeStyle: "short" }).format(new Date(a.fin))}{a.motivo && <span className="text-zinc-500"> · {a.motivo}</span>}</span>
+            <button className="text-red-700 underline dark:text-red-400" disabled={pendiente}
+              onClick={() => iniciar(async () => { await quitarApertura(a.id); router.refresh(); })}>Quitar</button>
+          </div>
+        ))}
       </section>
 
       <section className="flex flex-col gap-3">

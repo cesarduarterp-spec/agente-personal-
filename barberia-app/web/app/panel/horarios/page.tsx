@@ -7,9 +7,10 @@ export default async function Horarios() {
   const { supabase, barberia } = await cargarPanel();
   const { data: barberos } = await supabase.from("barberos").select("id, nombre").eq("barberia_id", barberia.id).eq("activo", true).order("nombre");
   const ids = (barberos ?? []).map((b) => b.id);
-  const [{ data: horarios }, { data: bloqueos }] = await Promise.all([
+  const [{ data: horarios }, { data: bloqueos }, { data: aperturas }] = await Promise.all([
     supabase.from("horarios").select("barbero_id, dia_semana, desde, hasta").in("barbero_id", ids).order("desde"),
     supabase.from("bloqueos").select("id, barbero_id, inicio, fin, motivo").in("barbero_id", ids).gte("fin", ventana(0).desde).order("inicio"),
+    supabase.from("aperturas").select("id, barbero_id, inicio, fin, motivo").in("barbero_id", ids).gte("fin", ventana(0).desde).order("inicio"),
   ]);
   return (
     <main className="mx-auto w-full max-w-xl flex-1 px-4 py-8">
@@ -22,6 +23,7 @@ export default async function Horarios() {
         barberos={barberos ?? []}
         horarios={(horarios ?? []).map((h) => ({ ...h, desde: h.desde.slice(0, 5), hasta: h.hasta.slice(0, 5) }))}
         bloqueos={bloqueos ?? []}
+        aperturas={aperturas ?? []}
       />
     </main>
   );

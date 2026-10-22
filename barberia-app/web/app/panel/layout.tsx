@@ -8,6 +8,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         <Link href="/panel" className={link}>Agenda</Link>
         <Link href="/panel/clientes" className={link}>Clientes</Link>
         <Link href="/panel/horarios" className={link}>Horarios</Link>
+        <Link href="/panel/configuracion" className={link}>Configuración</Link>
         <form action="/auth/salir" method="post" className="ml-auto">
           <button className={link}>Salir</button>
         </form>

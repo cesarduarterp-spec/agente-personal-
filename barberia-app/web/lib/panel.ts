@@ -17,7 +17,7 @@ export async function cargarPanel() {
   return { supabase, user, barberia: barberia as BarberiaPanel };
 }
 
-export function ventana(dias: number) {
+export function ventana(dias: number, horasAtras = 0) {
   const ahora = Date.now();
-  return { desde: new Date(ahora).toISOString(), hasta: new Date(ahora + dias * 864e5).toISOString() };
+  return { desde: new Date(ahora - horasAtras * 36e5).toISOString(), hasta: new Date(ahora + dias * 864e5).toISOString() };
 }

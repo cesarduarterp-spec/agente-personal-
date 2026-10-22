@@ -188,3 +188,23 @@ select nombre = 'Mara' and telefono = '11 2222-3333' and apellido = 'Gomez' and 
   from clientes where email = 'mara@x.com';
 select count(*) = 1 as impostor_tiene_su_ficha from clientes where email = 'impostor@x.com' and nombre = 'Impostor';
 \echo === BUSQUEDA OK ===
+
+-- 12. aperturas: abrir una fecha fuera del horario semanal; un bloqueo le gana
+select (:'dia'::date + 10) as d10 \gset
+select extract(dow from :'d10'::date)::int as dow10 \gset
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select guardar_horarios(:'barbero', (select jsonb_agg(jsonb_build_object('dia_semana', d, 'desde', '09:00', 'hasta', '18:00')) from generate_series(0,6) d where d <> :dow10));
+select count(*) = 0 as fecha_cerrada_sin_apertura from disponibilidad('juan-barber', :'barbero', :'servicio', :'d10'::date);
+select abrir_fecha(:'barbero', :'d10'::date, '10:00', '12:00', 'domingo extra') as bloqueos_superpuestos;
+select count(*) = 4 as fecha_abierta_4_horarios from disponibilidad('juan-barber', :'barbero', :'servicio', :'d10'::date);
+select pg_temp.expect_error(format($q$select abrir_fecha('%s', '%s', '12:00', '10:00')$q$, :'barbero', :'d10'), 'rango_invalido');
+select bloquear_dias(:'barbero', :'d10'::date, :'d10'::date, null, null, 'feriado') as aviso;
+select count(*) = 0 as bloqueo_le_gana_a_apertura from disponibilidad('juan-barber', :'barbero', :'servicio', :'d10'::date);
+reset role;
+set request.jwt.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select pg_temp.expect_error(format($q$select abrir_fecha('%s', '%s', '10:00', '12:00')$q$, :'barbero', :'d10'), 'barbero_no_existe');
+select count(*) = 0 as aperturas_aisladas from aperturas;
+reset role;
+\echo === APERTURAS OK ===

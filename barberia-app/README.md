@@ -17,7 +17,10 @@ barberia-app/
 - [x] Reserva rápida del cliente sin cuenta (`/<slug>`), Turnstile, Google Maps, gestión por link (`/turno/<token>`), mails de confirmación con .ics
 - [x] Fichas de clientes: se crean solas con los datos del turno, n° de ficha correlativo, buscador, orden alfabético por nombre, observaciones, historial de cortes con fotos
 - [x] Horarios: días y franjas que habilita el barbero, intervalo entre turnos, días libres y vacaciones
-- [ ] Edición de servicios / banner de promo / datos de la barbería
+- [x] Configuración: datos de la barbería, modo, zona y traslado, banner de promo, servicios y barberos (alta, edición, activar/desactivar)
+- [x] Agenda: marcar turnos como realizado / no vino / cancelado (avisa al cliente por mail)
+- [x] Fechas especiales abiertas fuera del horario semanal (los bloqueos siempre tienen prioridad)
+- [ ] Cargar un turno a mano (cliente que llama o llega sin reservar)
 - [ ] Workflows n8n + mails (Resend)
 
 ## Modelo de seguridad
@@ -30,12 +33,12 @@ barberia-app/
 ## Probar el esquema localmente
 Requiere un Postgres 14+ (sin Supabase):
 ```bash
-createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql
+createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql -f supabase/migrations/0004_aperturas.sql
 psql -d t -At -v ON_ERROR_STOP=1 -f supabase/tests/test.sql | grep -c "^f$"   # debe dar 0 (y verás los "=== ... OK ===")
 ```
 
 ## Puesta en marcha (cuentas tuyas)
-1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`.
+1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql` y `0004_aperturas.sql`.
    - Authentication → Providers: activar **Email** (con *Confirm email*) y **Google**.
    - Authentication → URL Configuration: *Site URL* = tu dominio; *Redirect URLs* = `https://tudominio.com/auth/callback` (y `http://localhost:3000/auth/callback` para desarrollo).
 2. **Google Cloud**:

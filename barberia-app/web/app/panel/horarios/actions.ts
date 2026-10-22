@@ -52,3 +52,23 @@ export async function quitarBloqueo(id: string): Promise<R> {
   revalidatePath("/panel/horarios");
   return { ok: true };
 }
+
+export async function abrirFecha(
+  barberoId: string, fecha: string, desde: string, hasta: string, motivo: string,
+): Promise<R<{ bloqueos: number }>> {
+  if (!FECHA.test(fecha)) return { ok: false, error: "Elegí la fecha." };
+  if (!HORA.test(desde) || !HORA.test(hasta) || hasta <= desde) return { ok: false, error: "La hora de cierre debe ser posterior a la de apertura." };
+  const { data, error } = await (await createClient()).rpc("abrir_fecha", {
+    p_barbero: barberoId, p_fecha: fecha, p_desde: desde, p_hasta: hasta, p_motivo: motivo.trim() || null,
+  });
+  if (error) return { ok: false, error: mensaje(error.message) };
+  revalidatePath("/panel/horarios");
+  return { ok: true, bloqueos: (data as number) ?? 0 };
+}
+
+export async function quitarApertura(id: string): Promise<R> {
+  const { error } = await (await createClient()).from("aperturas").delete().eq("id", id);
+  if (error) return { ok: false, error: "No pudimos quitar la apertura." };
+  revalidatePath("/panel/horarios");
+  return { ok: true };
+}
