@@ -2,6 +2,7 @@
 
 import { peso } from "@/lib/format";
 import { mapaUrl, textoSobre, urlLogo } from "@/lib/marca";
+import CabeceraMarca from "@/components/CabeceraMarca";
 import { useEffect, useRef, useState, useTransition } from "react";
 import Script from "next/script";
 import Link from "next/link";
@@ -112,20 +113,13 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8"
       style={{ "--marca": perfil.color, "--marca-texto": textoSobre(perfil.color) } as React.CSSProperties}>
       {SITEKEY && <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" onLoad={montarTurnstile} />}
-      <header className="flex items-center gap-4">
-        {urlLogo(perfil.logo_path) && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={urlLogo(perfil.logo_path)!} alt={`Logo de ${perfil.nombre}`} className="h-16 w-16 shrink-0 rounded-xl object-contain" />
+      <CabeceraMarca nombre={perfil.nombre} logo={urlLogo(perfil.logo_path)} alto={72}>
+        {perfil.direccion && (
+          <a className="text-sm text-zinc-600 underline dark:text-zinc-400" target="_blank" rel="noreferrer" href={mapaUrl(perfil.direccion, perfil.lat, perfil.lng)}>
+            📍 {perfil.direccion}
+          </a>
         )}
-        <div>
-          <h1 className="text-2xl font-semibold">{perfil.nombre}</h1>
-          {perfil.direccion && (
-            <a className="text-sm text-zinc-600 underline dark:text-zinc-400" target="_blank" rel="noreferrer" href={mapaUrl(perfil.direccion, perfil.lat, perfil.lng)}>
-              📍 {perfil.direccion}
-            </a>
-          )}
-        </div>
-      </header>
+      </CabeceraMarca>
       {perfil.banner && <p className="rounded-lg bg-amber-100 p-3 text-amber-900">{perfil.banner}</p>}
 
       <form onSubmit={enviar} className="flex flex-col gap-6">

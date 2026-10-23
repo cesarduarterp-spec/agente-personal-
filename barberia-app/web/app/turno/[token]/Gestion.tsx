@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { cancelar, obtenerHorariosTurno, reprogramar } from "./actions";
 import type { Dia } from "@/lib/public";
 import { mapaUrl, textoSobre, urlLogo } from "@/lib/marca";
+import CabeceraMarca from "@/components/CabeceraMarca";
 import type { Turno } from "./page";
 
 export default function Gestion({ token, turno, cuando, dias }: { token: string; turno: Turno; cuando: string; dias: Dia[] }) {
@@ -41,13 +42,7 @@ export default function Gestion({ token, turno, cuando, dias }: { token: string;
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-10"
       style={{ "--marca": turno.barberia.color, "--marca-texto": textoSobre(turno.barberia.color) } as React.CSSProperties}>
-      <div className="flex items-center gap-3">
-        {urlLogo(turno.barberia.logo_path) && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={urlLogo(turno.barberia.logo_path)!} alt="" className="h-12 w-12 shrink-0 rounded-lg object-contain" />
-        )}
-        <h1 className="text-2xl font-semibold">{turno.barberia.nombre}</h1>
-      </div>
+      <CabeceraMarca nombre={turno.barberia.nombre} logo={urlLogo(turno.barberia.logo_path)} alto={56} />
       <div className="rounded-lg border border-zinc-300 p-4 dark:border-zinc-700">
         <p className="font-medium">{cuando}</p>
         <p>{turno.servicio} con {turno.barbero}</p>
