@@ -35,7 +35,10 @@ export default async function Panel() {
         {user.email} · Tu link de reservas: <Link className="underline" href={`/${barberia.slug}`}>{base}/{barberia.slug}</Link>
       </p>
 
-      <h2 className="mt-8 font-medium">Ayer y próximos 7 días</h2>
+      <div className="mt-8 flex items-center justify-between gap-3">
+        <h2 className="font-medium">Ayer y próximos 7 días</h2>
+        <Link href="/panel/turnos/nuevo" className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-zinc-900">Cargar turno</Link>
+      </div>
       {turnos.length === 0 && <p className="mt-2 text-zinc-600 dark:text-zinc-400">No hay turnos reservados todavía.</p>}
       {[...porDia].map(([d, lista]) => (
         <section key={d} className="mt-4">

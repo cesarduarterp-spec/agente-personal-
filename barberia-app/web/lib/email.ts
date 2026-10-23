@@ -10,7 +10,7 @@ export async function enviarMail(to: string, subject: string, html: string, ics?
     console.warn(`[mail] RESEND_API_KEY no configurada; no se envió "${subject}" a ${to}`);
     return false;
   }
-  const r = await fetch("https://api.resend.com/emails", {
+  const r = await fetch(process.env.RESEND_API_URL ?? "https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -25,7 +25,7 @@ export async function enviarMail(to: string, subject: string, html: string, ics?
   return r.ok;
 }
 
-type Reserva = {
+export type Reserva = {
   turno_id: string; gestion_token: string; inicio: string; fin: string; modalidad: string;
   direccion_turno: string | null; indicaciones: string | null; precio: number | null;
   cliente: { nombre: string; apellido: string | null; telefono: string; email: string };
@@ -65,8 +65,34 @@ export async function enviarConfirmaciones(r: Reserva) {
     <p>${r.modalidad === "local" ? "En el local" : "A domicilio"}${lugar ? `: ${esc(lugar)}` : ""}${mapaUrl ? `<br><a href="${mapaUrl}">Cómo llegar</a>` : ""}</p>
     ${r.indicaciones ? `<p>Indicaciones: ${esc(r.indicaciones)}</p>` : ""}</div>`;
 
-  await Promise.allSettled([
+  const [alCliente] = await Promise.allSettled([
     enviarMail(r.cliente.email, `Turno confirmado: ${cuando}`, htmlCliente, ics),
     r.email_barbero ? enviarMail(r.email_barbero, `Nueva reserva: ${nombreCliente} · ${cuando}`, htmlBarbero) : Promise.resolve(),
   ]);
+  return alCliente.status === "fulfilled" && alCliente.value === true;
+}
+
+// Item que devuelve la función reclamar_recordatorios de la base
+export type Recordatorio = {
+  turno_id: string; tipo: "24h" | "2h"; inicio: string; modalidad: "local" | "domicilio";
+  gestion_token: string; direccion_turno: string | null;
+  cliente_nombre: string; cliente_email: string | null; servicio: string; barbero: string;
+  barberia: string; timezone: string; direccion_local: string | null; lat: number | null; lng: number | null;
+};
+
+export async function enviarRecordatorio(r: Recordatorio) {
+  if (!r.cliente_email) return true; // nada que enviar: no tiene sentido reintentar
+  const cuando = fmtFechaHora(r.inicio, r.timezone);
+  const link = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/turno/${r.gestion_token}`;
+  const lugar = r.modalidad === "local" ? r.direccion_local : r.direccion_turno;
+  const mapaUrl = lugar ? mapa(lugar, r.modalidad === "local" ? r.lat : null, r.modalidad === "local" ? r.lng : null) : null;
+  const titulo = r.tipo === "24h" ? "Mañana tenés turno" : "Tu turno es en 2 horas";
+  const html = `<div style="font-family:sans-serif;max-width:480px">
+    <h2>${titulo} ✂️</h2>
+    <p>Hola ${esc(r.cliente_nombre)}, te recordamos tu turno en <b>${esc(r.barberia)}</b>:</p>
+    <p><b>${esc(cuando)}</b><br>${esc(r.servicio)} con ${esc(r.barbero)}</p>
+    ${lugar ? `<p>${r.modalidad === "local" ? "📍" : "🏠"} ${esc(lugar)}${mapaUrl ? `<br><a href="${mapaUrl}">Ver en Google Maps</a>` : ""}</p>` : ""}
+    <p><a href="${link}" style="background:#111;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none">Reprogramar o cancelar</a></p>
+    <p style="color:#666;font-size:13px">¿No podés venir? Avisanos con tiempo así otra persona puede aprovechar el horario.</p></div>`;
+  return enviarMail(r.cliente_email, `${titulo}: ${cuando}`, html);
 }

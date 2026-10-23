@@ -208,3 +208,20 @@ select pg_temp.expect_error(format($q$select abrir_fecha('%s', '%s', '10:00', '1
 select count(*) = 0 as aperturas_aisladas from aperturas;
 reset role;
 \echo === APERTURAS OK ===
+
+-- 13. turno manual: fuera de horario permitido, superposición rechazada, aislado por barbería
+select (:'dia'::date + 20) as d20 \gset
+select id as cliente_pedro from clientes where email = 'pedro@x.com' \gset
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select (crear_turno_manual(:'barbero', :'servicio', :'cliente_pedro', :'d20'::date, '22:00', 'local') ->> 'turno_id') is not null as manual_fuera_de_horario;
+select pg_temp.expect_error(format($q$select crear_turno_manual('%s','%s','%s','%s','22:15','local')$q$, :'barbero', :'servicio', :'cliente_pedro', :'d20'), 'horario_no_disponible');
+select pg_temp.expect_error(format($q$select crear_turno_manual('%s','%s','%s','%s','10:00','domicilio')$q$, :'barbero', :'servicio', :'cliente_pedro', :'d20'), 'direccion_requerida');
+select (crear_turno_manual(:'barbero', :'servicio', :'cliente_pedro', :'d20'::date, '22:30', 'local') ->> 'turno_id') is not null as manual_contiguo_ok;
+reset role;
+select (inicio at time zone 'America/Argentina/Buenos_Aires')::time = '22:00' as hora_local_correcta from turnos where inicio = (:'d20'::date + time '22:00') at time zone 'America/Argentina/Buenos_Aires';
+set request.jwt.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select pg_temp.expect_error(format($q$select crear_turno_manual('%s','%s','%s','%s','09:00','local')$q$, :'barbero', :'servicio', :'cliente_pedro', :'d20'), 'barbero_no_existe');
+reset role;
+\echo === MANUAL OK ===
