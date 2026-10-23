@@ -1,5 +1,6 @@
 "use client";
 
+import { peso } from "@/lib/format";
 import { useEffect, useRef, useState, useTransition } from "react";
 import Script from "next/script";
 import Link from "next/link";
@@ -121,7 +122,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
           {servicios.map((s) => (
             <label key={s.id} className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 ${servicio === s.id ? "border-zinc-900 dark:border-white" : "border-zinc-300 dark:border-zinc-700"}`}>
               <span><input type="radio" className="mr-2" name="servicio" checked={servicio === s.id} onChange={() => setServicio(s.id)} />{s.nombre} <span className="text-sm text-zinc-500">· {s.duracion_min} min</span></span>
-              <span className="font-medium">${s.precio}</span>
+              <span className="font-medium">{peso(s.precio)}</span>
             </label>
           ))}
         </section>
@@ -177,7 +178,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
             <h2 className="font-medium">¿Dónde te corta?</h2>
             <DireccionInput value={dir} onChange={setDir} permitirUbicacion />
             <input placeholder="Piso / depto / timbre / indicaciones" value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} className={campo} />
-            {!!perfil.recargo_traslado && <p className="text-sm text-zinc-500">Incluye ${perfil.recargo_traslado} de traslado.</p>}
+            {!!perfil.recargo_traslado && <p className="text-sm text-zinc-500">Incluye {peso(perfil.recargo_traslado)} de traslado.</p>}
           </section>
         )}
 
@@ -199,7 +200,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
         {error && <p role="alert" className="text-red-700 dark:text-red-400">{error}</p>}
         <button disabled={pendiente || !inicio || (!!SITEKEY && !turnstile)}
           className="rounded-lg bg-zinc-900 px-4 py-3 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900">
-          {pendiente ? "Reservando…" : svc ? `Reservar · $${svc.precio + (modalidad === "domicilio" ? perfil.recargo_traslado ?? 0 : 0)}` : "Reservar"}
+          {pendiente ? "Reservando…" : svc ? `Reservar · ${peso(svc.precio + (modalidad === "domicilio" ? perfil.recargo_traslado ?? 0 : 0))}` : "Reservar"}
         </button>
         <p className="text-center text-xs text-zinc-500">Reprogramar o cancelar es gratis hasta {perfil.horas_min_cancelacion} h antes.</p>
       </form>

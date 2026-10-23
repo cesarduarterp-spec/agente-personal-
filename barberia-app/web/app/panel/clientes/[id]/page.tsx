@@ -1,3 +1,4 @@
+import { peso } from "@/lib/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cargarPanel } from "@/lib/panel";
@@ -61,7 +62,7 @@ export default async function Ficha({ params, searchParams }: PageProps<"/panel/
         {cortes.map((x) => (
           <article key={x.id} className="rounded-lg border border-zinc-300 p-4 dark:border-zinc-700">
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium">{new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeZone: "UTC" }).format(new Date(x.fecha))}{x.servicio && ` · ${x.servicio}`}{x.precio != null && ` · $${x.precio}`}</p>
+              <p className="font-medium">{new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeZone: "UTC" }).format(new Date(x.fecha))}{x.servicio && ` · ${x.servicio}`}{x.precio != null && ` · ${peso(x.precio)}`}</p>
               <BorrarCorte corteId={x.id} clienteId={c.id} />
             </div>
             {x.nota && <p className="mt-1 whitespace-pre-line text-sm">{x.nota}</p>}

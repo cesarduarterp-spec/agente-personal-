@@ -1,5 +1,6 @@
 "use client";
 
+import { peso } from "@/lib/format";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import DireccionInput, { type Direccion } from "@/components/DireccionInput";
@@ -95,7 +96,7 @@ export default function Formulario({
         )}
         <select required value={servicio} onChange={(e) => setServicio(e.target.value)} className={campo}>
           <option value="">Servicio…</option>
-          {servicios.map((s) => <option key={s.id} value={s.id}>{s.nombre} · {s.duracion_min} min · ${s.precio}</option>)}
+          {servicios.map((s) => <option key={s.id} value={s.id}>{s.nombre} · {s.duracion_min} min · {peso(s.precio)}</option>)}
         </select>
         <div className="grid grid-cols-2 gap-3">
           <input type="date" required value={fecha} onChange={(e) => setFecha(e.target.value)} className={campo} />

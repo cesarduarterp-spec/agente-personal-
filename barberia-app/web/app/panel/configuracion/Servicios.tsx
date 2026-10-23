@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { alternarServicio, borrarServicio, guardarServicio } from "./actions";
 
-const campo = "rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900";
+const campo = "w-full min-w-0 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900";
 type S = { id: string; nombre: string; precio: number; duracion_min: number; activo: boolean };
 
 function Fila({ barberiaId, s, alTerminar }: { barberiaId: string; s: S | null; alTerminar: () => void }) {

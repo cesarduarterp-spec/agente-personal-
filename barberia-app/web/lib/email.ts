@@ -1,3 +1,4 @@
+import { peso } from "@/lib/format";
 import "server-only";
 import { fmtFechaHora } from "@/lib/public";
 
@@ -54,7 +55,7 @@ export async function enviarConfirmaciones(r: Reserva) {
   const htmlCliente = `<div style="font-family:sans-serif;max-width:480px">
     <h2>Turno confirmado ✅</h2>
     <p>Hola ${esc(r.cliente.nombre)}, tu turno en <b>${esc(r.barberia.nombre)}</b>:</p>
-    <p><b>${esc(cuando)}</b><br>${esc(r.servicio)} con ${esc(r.barbero)}${r.precio != null ? ` · $${r.precio}` : ""}</p>
+    <p><b>${esc(cuando)}</b><br>${esc(r.servicio)} con ${esc(r.barbero)}${r.precio != null ? ` · ${peso(r.precio)}` : ""}</p>
     ${lugar ? `<p>${r.modalidad === "local" ? "📍 Local" : "🏠 Te visitamos en"}: ${esc(lugar)}${mapaUrl ? `<br><a href="${mapaUrl}">Ver en Google Maps</a>` : ""}</p>` : ""}
     <p><a href="${link}" style="background:#111;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none">Reprogramar o cancelar</a></p>
     <p style="color:#666;font-size:13px">Es gratis y no necesitás cuenta. Se agregó un archivo para tu calendario.</p></div>`;

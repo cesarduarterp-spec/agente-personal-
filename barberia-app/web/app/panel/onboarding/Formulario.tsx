@@ -6,7 +6,7 @@ import DireccionInput, { type Direccion } from "@/components/DireccionInput";
 import { crearBarberia } from "./actions";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const campo = "rounded-lg border border-zinc-300 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900";
+const campo = "min-w-0 rounded-lg border border-zinc-300 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900";
 const sinDireccion: Direccion = { direccion: "", lat: null, lng: null, place_id: null };
 
 type Modo = "local" | "domicilio" | "ambos";

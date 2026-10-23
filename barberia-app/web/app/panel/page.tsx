@@ -42,7 +42,7 @@ export default async function Panel() {
       {turnos.length === 0 && <p className="mt-2 text-zinc-600 dark:text-zinc-400">No hay turnos reservados todavía.</p>}
       {[...porDia].map(([d, lista]) => (
         <section key={d} className="mt-4">
-          <h3 className="text-sm font-medium capitalize text-zinc-600 dark:text-zinc-400">{d}</h3>
+          <h3 className="text-sm font-medium first-letter:uppercase text-zinc-600 dark:text-zinc-400">{d}</h3>
           <ul className="mt-1 flex flex-col gap-2">
             {lista.map((t) => (
               <li key={t.id} className={`rounded-lg border border-zinc-300 p-3 dark:border-zinc-700 ${t.estado === "cancelado" ? "opacity-50" : ""}`}>
