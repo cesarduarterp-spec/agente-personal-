@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { cargarPanel, ventana } from "@/lib/panel";
 import Acciones from "./Acciones";
+import { rutaUrl } from "@/lib/marca";
 
 export const dynamic = "force-dynamic";
 
 type Fila = {
-  id: string; inicio: string; modalidad: string; direccion: string | null; estado: string;
+  id: string; inicio: string; modalidad: string; direccion: string | null; lat: number | null; lng: number | null; estado: string;
   servicios: { nombre: string } | null;
   clientes: { id: string; numero: number; nombre: string; apellido: string | null; telefono: string | null } | null;
 };
@@ -17,7 +18,7 @@ export default async function Panel() {
 
   const { data } = await supabase
     .from("turnos")
-    .select("id, inicio, modalidad, direccion, estado, servicios(nombre), clientes(id, numero, nombre, apellido, telefono)")
+    .select("id, inicio, modalidad, direccion, lat, lng, estado, servicios(nombre), clientes(id, numero, nombre, apellido, telefono)")
     .gte("inicio", desde)
     .lte("inicio", hasta)
     .order("inicio");
@@ -56,7 +57,10 @@ export default async function Panel() {
                   </p>
                 )}
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  {t.modalidad === "local" ? "En el local" : `🏠 ${t.direccion ?? "A domicilio"}`}
+                  {t.modalidad === "local" ? "En el local" : (
+                    <>🏠 {t.direccion ?? "A domicilio"} ·{" "}
+                      <a className="underline" target="_blank" rel="noreferrer" href={rutaUrl(t.direccion, t.lat, t.lng)}>Cómo llegar</a></>
+                  )}
                 </p>
                 <Acciones turnoId={t.id} estado={t.estado} />
               </li>

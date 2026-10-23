@@ -56,7 +56,7 @@ export async function crearTurnoManual(i: TurnoManualInput): Promise<TurnoManual
       supabase.from("servicios").select("nombre").eq("id", i.servicio).single(),
       supabase.from("barberos").select("nombre, barberia_id").eq("id", i.barbero).single(),
     ]);
-    const { data: b } = br ? await supabase.from("barberias").select("nombre, slug, direccion, lat, lng, timezone").eq("id", br.barberia_id).single() : { data: null };
+    const { data: b } = br ? await supabase.from("barberias").select("nombre, slug, direccion, lat, lng, timezone, color_marca, logo_path").eq("id", br.barberia_id).single() : { data: null };
     if (c?.email && s && br && b) {
       mail = "no_enviado";
       try {
@@ -65,7 +65,8 @@ export async function crearTurnoManual(i: TurnoManualInput): Promise<TurnoManual
           direccion_turno: i.modalidad === "domicilio" ? i.direccion : null, indicaciones: i.indicaciones || null, precio: t.precio,
           cliente: { nombre: c.nombre, apellido: c.apellido, telefono: c.telefono ?? "", email: c.email },
           servicio: s.nombre, barbero: br.nombre, email_barbero: null,
-          barberia: { nombre: b.nombre, direccion: b.direccion, lat: b.lat, lng: b.lng, timezone: b.timezone },
+          lat_turno: i.modalidad === "domicilio" ? i.lat : null, lng_turno: i.modalidad === "domicilio" ? i.lng : null,
+          barberia: { nombre: b.nombre, direccion: b.direccion, lat: b.lat, lng: b.lng, timezone: b.timezone, color: b.color_marca, logo_path: b.logo_path },
         });
         mail = salio ? "enviado" : "no_enviado";
       } catch { /* el turno ya está creado; se informa que el mail no salió */ }

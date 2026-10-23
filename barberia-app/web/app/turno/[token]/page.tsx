@@ -9,7 +9,8 @@ export type Turno = {
   inicio: string; estado: string; modalidad: "local" | "domicilio"; servicio: string; servicio_id: string;
   barbero: string; barbero_id: string; precio: number | null; direccion_turno: string | null;
   puede_modificar: boolean; horas_min_cancelacion: number;
-  barberia: { nombre: string; slug: string; timezone: string; direccion: string | null; lat: number | null; lng: number | null };
+  barberia: { nombre: string; slug: string; timezone: string; direccion: string | null; lat: number | null; lng: number | null; color: string; logo_path: string | null };
+  lat_turno: number | null; lng_turno: number | null;
 };
 
 export default async function Pagina({ params }: PageProps<"/turno/[token]">) {

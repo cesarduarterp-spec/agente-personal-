@@ -2,6 +2,7 @@ import { cargarPanel } from "@/lib/panel";
 import FormBarberia from "./FormBarberia";
 import Servicios from "./Servicios";
 import Barberos from "./Barberos";
+import Marca from "./Marca";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function Configuracion() {
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-10 px-4 py-8">
       <h1 className="text-2xl font-semibold">Configuración</h1>
+      <Marca barberiaId={barberia.id} nombre={b.nombre} colorInicial={b.color_marca ?? "#111827"} logoInicial={b.logo_path ?? null} />
       <FormBarberia b={b} />
       <Servicios barberiaId={barberia.id} servicios={servicios ?? []} />
       <Barberos barberiaId={barberia.id} barberos={barberos ?? []} />

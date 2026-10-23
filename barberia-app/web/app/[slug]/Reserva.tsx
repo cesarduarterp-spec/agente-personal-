@@ -1,6 +1,7 @@
 "use client";
 
 import { peso } from "@/lib/format";
+import { mapaUrl, textoSobre, urlLogo } from "@/lib/marca";
 import { useEffect, useRef, useState, useTransition } from "react";
 import Script from "next/script";
 import Link from "next/link";
@@ -12,7 +13,7 @@ export type Perfil = {
   slug: string; nombre: string; modo: "local" | "domicilio" | "ambos";
   direccion: string | null; lat: number | null; lng: number | null;
   radio_cobertura_km: number | null; recargo_traslado: number | null;
-  horas_min_cancelacion: number; banner: string | null; timezone: string;
+  horas_min_cancelacion: number; banner: string | null; timezone: string; color: string; logo_path: string | null;
   barberos: { id: string; nombre: string }[];
   servicios: { id: string; nombre: string; precio: number; duracion_min: number }[];
 };
@@ -108,11 +109,22 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
     );
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8"
+      style={{ "--marca": perfil.color, "--marca-texto": textoSobre(perfil.color) } as React.CSSProperties}>
       {SITEKEY && <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" onLoad={montarTurnstile} />}
-      <header>
-        <h1 className="text-2xl font-semibold">{perfil.nombre}</h1>
-        {perfil.direccion && <p className="text-sm text-zinc-600 dark:text-zinc-400">📍 {perfil.direccion}</p>}
+      <header className="flex items-center gap-4">
+        {urlLogo(perfil.logo_path) && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={urlLogo(perfil.logo_path)!} alt={`Logo de ${perfil.nombre}`} className="h-16 w-16 shrink-0 rounded-xl object-contain" />
+        )}
+        <div>
+          <h1 className="text-2xl font-semibold">{perfil.nombre}</h1>
+          {perfil.direccion && (
+            <a className="text-sm text-zinc-600 underline dark:text-zinc-400" target="_blank" rel="noreferrer" href={mapaUrl(perfil.direccion, perfil.lat, perfil.lng)}>
+              📍 {perfil.direccion}
+            </a>
+          )}
+        </div>
       </header>
       {perfil.banner && <p className="rounded-lg bg-amber-100 p-3 text-amber-900">{perfil.banner}</p>}
 
@@ -120,7 +132,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
         <section className="flex flex-col gap-2">
           <h2 className="font-medium">1. Servicio</h2>
           {servicios.map((s) => (
-            <label key={s.id} className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 ${servicio === s.id ? "border-zinc-900 dark:border-white" : "border-zinc-300 dark:border-zinc-700"}`}>
+            <label key={s.id} className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 ${servicio === s.id ? "border-[var(--marca)] ring-1 ring-[var(--marca)]" : "border-zinc-300 dark:border-zinc-700"}`}>
               <span><input type="radio" className="mr-2" name="servicio" checked={servicio === s.id} onChange={() => setServicio(s.id)} />{s.nombre} <span className="text-sm text-zinc-500">· {s.duracion_min} min</span></span>
               <span className="font-medium">{peso(s.precio)}</span>
             </label>
@@ -141,7 +153,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
           <section className="flex gap-2">
             {(["local", "domicilio"] as const).map((m) => (
               <button key={m} type="button" onClick={() => setModalidad(m)}
-                className={`flex-1 rounded-lg border px-3 py-3 ${modalidad === m ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900" : "border-zinc-300 dark:border-zinc-700"}`}>
+                className={`flex-1 rounded-lg border px-3 py-3 ${modalidad === m ? "border-[var(--marca)] bg-[var(--marca)] text-[var(--marca-texto)]" : "border-zinc-300 dark:border-zinc-700"}`}>
                 {m === "local" ? "En el local" : "A domicilio"}
               </button>
             ))}
@@ -153,7 +165,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
           <div className="flex gap-2 overflow-x-auto pb-1">
             {dias.map((d) => (
               <button key={d.fecha} type="button" onClick={() => setFecha(d.fecha)}
-                className={`shrink-0 rounded-lg border px-3 py-2 text-sm ${fecha === d.fecha ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900" : "border-zinc-300 dark:border-zinc-700"}`}>
+                className={`shrink-0 rounded-lg border px-3 py-2 text-sm ${fecha === d.fecha ? "border-[var(--marca)] bg-[var(--marca)] text-[var(--marca-texto)]" : "border-zinc-300 dark:border-zinc-700"}`}>
                 {d.etiqueta}
               </button>
             ))}
@@ -165,7 +177,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
               <div className="grid grid-cols-4 gap-2">
                 {horarios.map((h) => (
                   <button key={h} type="button" onClick={() => setInicio(h)}
-                    className={`rounded-lg border py-2 text-sm ${inicio === h ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900" : "border-zinc-300 dark:border-zinc-700"}`}>
+                    className={`rounded-lg border py-2 text-sm ${inicio === h ? "border-[var(--marca)] bg-[var(--marca)] text-[var(--marca-texto)]" : "border-zinc-300 dark:border-zinc-700"}`}>
                     {hora(h)}
                   </button>
                 ))}
@@ -199,7 +211,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
         {SITEKEY && <div ref={tsEl} />}
         {error && <p role="alert" className="text-red-700 dark:text-red-400">{error}</p>}
         <button disabled={pendiente || !inicio || (!!SITEKEY && !turnstile)}
-          className="rounded-lg bg-zinc-900 px-4 py-3 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900">
+          className="rounded-lg bg-[var(--marca)] px-4 py-3 font-medium text-[var(--marca-texto)] disabled:opacity-50">
           {pendiente ? "Reservando…" : svc ? `Reservar · ${peso(svc.precio + (modalidad === "domicilio" ? perfil.recargo_traslado ?? 0 : 0))}` : "Reservar"}
         </button>
         <p className="text-center text-xs text-zinc-500">Reprogramar o cancelar es gratis hasta {perfil.horas_min_cancelacion} h antes.</p>

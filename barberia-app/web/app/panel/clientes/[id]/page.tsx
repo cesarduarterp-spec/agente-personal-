@@ -1,4 +1,5 @@
 import { peso } from "@/lib/format";
+import { rutaUrl } from "@/lib/marca";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cargarPanel } from "@/lib/panel";
@@ -48,6 +49,12 @@ export default async function Ficha({ params, searchParams }: PageProps<"/panel/
         <h1 className="mt-2 text-2xl font-semibold">{c.nombre} {c.apellido}</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">Ficha n° <b>{c.numero}</b> · cliente desde {new Intl.DateTimeFormat("es-AR", { timeZone: tz, dateStyle: "medium" }).format(new Date(c.created_at))}</p>
       </div>
+
+      {c.direccion && (
+        <a className="-mt-4 w-fit text-sm underline" target="_blank" rel="noreferrer" href={rutaUrl(c.direccion, c.lat, c.lng)}>
+          🏠 {c.direccion} · Cómo llegar (Google Maps)
+        </a>
+      )}
 
       <FichaForm id={c.id} inicial={{
         nombre: c.nombre, apellido: c.apellido ?? "", telefono: c.telefono ?? "", email: c.email ?? "",

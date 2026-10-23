@@ -97,6 +97,15 @@ export default function DireccionInput({
           Usar mi ubicación actual
         </button>
       )}
+      {KEY && value.lat != null && value.lng != null && (
+        <iframe
+          title="Ubicación en Google Maps"
+          className="h-44 w-full rounded-lg border-0"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          src={`https://www.google.com/maps/embed/v1/place?key=${KEY}&q=${value.lat},${value.lng}&zoom=17`}
+        />
+      )}
       {value.direccion && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Seleccionada: {value.direccion}

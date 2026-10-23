@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { cancelar, obtenerHorariosTurno, reprogramar } from "./actions";
 import type { Dia } from "@/lib/public";
+import { mapaUrl, textoSobre, urlLogo } from "@/lib/marca";
 import type { Turno } from "./page";
 
 export default function Gestion({ token, turno, cuando, dias }: { token: string; turno: Turno; cuando: string; dias: Dia[] }) {
@@ -38,13 +39,22 @@ export default function Gestion({ token, turno, cuando, dias }: { token: string;
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-10">
-      <h1 className="text-2xl font-semibold">{turno.barberia.nombre}</h1>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-10"
+      style={{ "--marca": turno.barberia.color, "--marca-texto": textoSobre(turno.barberia.color) } as React.CSSProperties}>
+      <div className="flex items-center gap-3">
+        {urlLogo(turno.barberia.logo_path) && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={urlLogo(turno.barberia.logo_path)!} alt="" className="h-12 w-12 shrink-0 rounded-lg object-contain" />
+        )}
+        <h1 className="text-2xl font-semibold">{turno.barberia.nombre}</h1>
+      </div>
       <div className="rounded-lg border border-zinc-300 p-4 dark:border-zinc-700">
         <p className="font-medium">{cuando}</p>
         <p>{turno.servicio} con {turno.barbero}</p>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {turno.modalidad === "local" ? `📍 ${turno.barberia.direccion ?? "Local"}` : `🏠 ${turno.direccion_turno ?? "A domicilio"}`}
+          {turno.modalidad === "local"
+            ? <a className="underline" target="_blank" rel="noreferrer" href={mapaUrl(turno.barberia.direccion, turno.barberia.lat, turno.barberia.lng)}>📍 {turno.barberia.direccion ?? "Local"}</a>
+            : <a className="underline" target="_blank" rel="noreferrer" href={mapaUrl(turno.direccion_turno, turno.lat_turno, turno.lng_turno)}>🏠 {turno.direccion_turno ?? "A domicilio"}</a>}
         </p>
         <p className="mt-2 text-sm">{estado === "cancelado" ? "❌ Cancelado" : estado === "confirmado" ? "✅ Confirmado" : estado}</p>
       </div>
@@ -71,7 +81,7 @@ export default function Gestion({ token, turno, cuando, dias }: { token: string;
           <div className="flex gap-2 overflow-x-auto pb-1">
             {dias.map((d) => (
               <button key={d.fecha} onClick={() => setFecha(d.fecha)}
-                className={`shrink-0 rounded-lg border px-3 py-2 text-sm ${fecha === d.fecha ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900" : "border-zinc-300 dark:border-zinc-700"}`}>{d.etiqueta}</button>
+                className={`shrink-0 rounded-lg border px-3 py-2 text-sm ${fecha === d.fecha ? "border-[var(--marca)] bg-[var(--marca)] text-[var(--marca-texto)]" : "border-zinc-300 dark:border-zinc-700"}`}>{d.etiqueta}</button>
             ))}
           </div>
           {fecha && (horarios === null ? <p className="text-sm text-zinc-500">Buscando…</p>

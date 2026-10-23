@@ -96,3 +96,28 @@ export async function alternarBarbero(barberiaId: string, id: string, activo: bo
   revalidatePath("/panel", "layout");
   return { ok: true };
 }
+
+const COLOR = /^#[0-9a-fA-F]{6}$/;
+
+// logoPath: undefined = no cambiar, null = quitar el logo, string = ruta del logo recién subido
+export async function guardarMarca(barberiaId: string, color: string, logoPath: string | null | undefined): Promise<R> {
+  if (!COLOR.test(color)) return { ok: false, error: "El color no es válido." };
+  if (typeof logoPath === "string" && (!logoPath.startsWith(`${barberiaId}/`) || logoPath.includes(".."))) {
+    return { ok: false, error: "Logo inválido." };
+  }
+  const supabase = await createClient();
+  const { data: actual } = await supabase.from("barberias").select("logo_path").eq("id", barberiaId).maybeSingle();
+  if (!actual) return { ok: false, error: "No encontramos la barbería." };
+
+  const cambios: { color_marca: string; logo_path?: string | null } = { color_marca: color.toLowerCase() };
+  if (logoPath !== undefined) cambios.logo_path = logoPath;
+  const { error } = await supabase.from("barberias").update(cambios).eq("id", barberiaId);
+  if (error) return { ok: false, error: "No pudimos guardar la marca." };
+
+  // se borra el logo anterior para no acumular archivos
+  if (logoPath !== undefined && actual.logo_path && actual.logo_path !== logoPath) {
+    await supabase.storage.from("marcas").remove([actual.logo_path]);
+  }
+  revalidatePath("/panel", "layout");
+  return { ok: true };
+}

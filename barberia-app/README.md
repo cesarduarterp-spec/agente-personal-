@@ -33,17 +33,17 @@ barberia-app/
 ## Probar el esquema localmente
 Requiere un Postgres 14+ (sin Supabase):
 ```bash
-createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql -f supabase/migrations/0004_aperturas.sql -f supabase/migrations/0005_turno_manual.sql
+createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql -f supabase/migrations/0004_aperturas.sql -f supabase/migrations/0005_turno_manual.sql -f supabase/migrations/0006_marca_y_mapas.sql
 psql -d t -At -v ON_ERROR_STOP=1 -f supabase/tests/test.sql | grep -c "^f$"   # debe dar 0 (y verás los "=== ... OK ===")
 ```
 
 ## Puesta en marcha (cuentas tuyas)
-1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`, `0004_aperturas.sql` y `0005_turno_manual.sql`.
+1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`, `0004_aperturas.sql`, `0005_turno_manual.sql` y `0006_marca_y_mapas.sql`.
    - Authentication → Providers: activar **Email** (con *Confirm email*) y **Google**.
    - Authentication → URL Configuration: *Site URL* = tu dominio; *Redirect URLs* = `https://tudominio.com/auth/callback` (y `http://localhost:3000/auth/callback` para desarrollo).
 2. **Google Cloud**:
    - Cliente OAuth (tipo Web) con el redirect de Supabase (`https://<proyecto>.supabase.co/auth/v1/callback`); cargar Client ID/Secret en Supabase.
-   - Clave de **Maps** restringida por dominio (HTTP referrer) y a las APIs Maps JavaScript, Places y Geocoding.
+   - Clave de **Maps** restringida por dominio (HTTP referrer) y a estas 4 APIs, que hay que **habilitar**: *Maps JavaScript API*, *Places API (New)*, *Geocoding API* y *Maps Embed API* (esta última, para el mapa de confirmación, no tiene costo por uso).
    - **Presupuesto con alertas** (Billing → Budgets & alerts) para enterarte si se pasa del cupo gratuito.
 3. **Cloudflare Turnstile**: crear el widget y copiar site key / secret key.
 4. **Resend**: verificar tu dominio y agregar los registros **SPF, DKIM y DMARC** en el DNS.

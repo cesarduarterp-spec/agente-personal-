@@ -225,3 +225,23 @@ set role authenticated;
 select pg_temp.expect_error(format($q$select crear_turno_manual('%s','%s','%s','%s','09:00','local')$q$, :'barbero', :'servicio', :'cliente_pedro', :'d20'), 'barbero_no_existe');
 reset role;
 \echo === MANUAL OK ===
+
+-- 14. marca y coordenadas del domicilio
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+update barberias set color_marca = '#b45309', logo_path = :'barberia' || '/logo.png' where id = :'barberia';
+select pg_temp.expect_error(format($q$update barberias set color_marca = 'rojo' where id = '%s'$q$, :'barberia'), 'barberias_color_marca_check');
+reset role;
+set role anon;
+select (perfil_publico('juan-barber') ->> 'color') = '#b45309' and (perfil_publico('juan-barber') ->> 'logo_path') like '%/logo.png' as perfil_con_marca;
+reset role;
+select (:'dia'::date + 8 + time '12:00') at time zone 'America/Argentina/Buenos_Aires' as m12 \gset
+set role service_role;
+select (crear_reserva('juan-barber', :'barbero', :'servicio', :'m12', 'domicilio', 'Geo','Test','11 9999-0000','geo@x.com','Cerca 9',-34.61,-58.39,null,true) ->> 'lat_turno')::float = -34.61 as reserva_devuelve_coordenadas;
+reset role;
+update turnos set inicio = now() + interval '20 hours', fin = now() + interval '20 hours 30 minutes', ocupa_hasta = now() + interval '20 hours 50 minutes', agendado_at = now() - interval '2 days'
+  where cliente_id = (select id from clientes where email = 'geo@x.com');
+set role service_role;
+select (select count(*) from reclamar_recordatorios('24h') r where (r ->> 'lat_turno')::float = -34.61 and r ->> 'color' = '#b45309') = 1 as recordatorio_con_coordenadas_y_color;
+reset role;
+\echo === MARCA OK ===
