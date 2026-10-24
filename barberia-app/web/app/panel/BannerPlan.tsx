@@ -20,6 +20,7 @@ export default async function BannerPlan() {
   if (!p.habilitada) return <p className={`${base} bg-red-100 text-red-900`}>Tu plan venció y tus clientes no pueden reservar.{enlace}</p>;
   if (p.estado === "prueba") {
     const d = dias(p.prueba_hasta);
+    if (d <= 0 && !p.cobro_activo) return null; // prueba terminada pero sin cobro activo: no hay nada que avisar
     return <p className={`${base} ${d <= 7 && p.cobro_activo ? "bg-amber-100 text-amber-900" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"}`}>
       Prueba gratis: te {d === 1 ? "queda 1 día" : `quedan ${Math.max(d, 0)} días`}.{enlace}</p>;
   }

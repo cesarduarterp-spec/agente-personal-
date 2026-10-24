@@ -13,10 +13,7 @@ No necesita n8n ni `curl`. Corre **dentro del contenedor de la app**, así el se
 
 Coolify → tu aplicación → **Scheduled Tasks** → **Add**:
 - **Name:** `recordatorios`
-- **Command:**
-  ```
-  node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/recordatorios',{method:'POST',headers:{authorization:'Bearer '+process.env.CRON_SECRET}}).then(async r=>{console.log(r.status,await r.text());process.exit(r.ok?0:1)}).catch(e=>{console.error('ERROR',e.message);process.exit(1)})"
-  ```
+- **Command:** `node scripts/recordatorios.mjs`
 - **Frequency:** `*/10 * * * *` (cada 10 minutos)
 - **Container:** el de la app (si te pide elegir, dejá el único que aparece)
 

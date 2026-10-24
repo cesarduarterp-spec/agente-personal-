@@ -42,7 +42,7 @@ revisalas en su sitio antes de fijar el precio. Confirmá todo esto en su docume
 4. En Coolify, cargar las variables (y redesplegar):
    - `LEMONSQUEEZY_WEBHOOK_SECRET` = el signing secret del paso 3
    - `LEMONSQUEEZY_CHECKOUT_URL` = el link de compra del paso 2
-   - `NEXT_PUBLIC_PLAN_PRECIO` = por ejemplo `USD 15 por mes`
+   - `PLAN_PRECIO` = por ejemplo `USD 15 por mes` (opcional; también `CONTACTO_EMAIL`, que se muestra si todavía no hay link de pago)
 5. Probar en **modo de prueba** de Lemon Squeezy con una tarjeta de prueba, y verificar que el pago aparezca en
    `/admin/pagos` y que el plan pase a "Pagando".
 6. **Verificar con el primer pago real** que el monto se registra bien (el sistema interpreta el total del aviso en

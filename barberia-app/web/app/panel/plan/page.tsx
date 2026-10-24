@@ -14,8 +14,8 @@ export default async function MiPlan() {
   ]);
   const plan = p as Plan | null;
   const checkout = process.env.LEMONSQUEEZY_CHECKOUT_URL;
-  const precio = process.env.NEXT_PUBLIC_PLAN_PRECIO;
-  const contacto = process.env.NEXT_PUBLIC_CONTACTO_EMAIL;
+  const precio = process.env.PLAN_PRECIO;
+  const contacto = process.env.CONTACTO_EMAIL;
   // la barbería viaja en el link para asociar el pago; el proveedor la devuelve en el aviso
   const link = checkout ? `${checkout}${checkout.includes("?") ? "&" : "?"}checkout[custom][barberia_id]=${encodeURIComponent(barberia.id)}&checkout[email]=${encodeURIComponent(user.email ?? "")}` : null;
 

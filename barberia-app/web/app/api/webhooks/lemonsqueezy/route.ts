@@ -30,9 +30,11 @@ export async function POST(request: NextRequest) {
   const { data, error } = await createAdminClient().rpc("registrar_evento_cobro", params);
   if (error) {
     if (error.message.includes("barberia_no_existe")) {
-      // aviso que no podemos asociar a ninguna barbería: reintentar no sirve; se deja registro para revisarlo
-      console.error("[cobros] aviso sin barbería asociada:", params.p_tipo, params.p_suscripcion_id);
-      return NextResponse.json({ ok: true, sin_barberia: true });
+      // puede ser un cobro que llegó antes que el aviso de alta de la suscripción: se responde con error
+      // para que el proveedor reintente (la base deshace todo, así que el reintento se procesa normalmente).
+      // Un aviso realmente huérfano agota sus reintentos, sin consecuencias.
+      console.error("[cobros] aviso sin barbería asociada (se reintentará):", params.p_tipo, params.p_suscripcion_id);
+      return NextResponse.json({ error: "barbería aún no asociada" }, { status: 503 });
     }
     console.error("[cobros] error al registrar:", error.message);
     return NextResponse.json({ error: "error interno" }, { status: 500 }); // el proveedor reintenta
