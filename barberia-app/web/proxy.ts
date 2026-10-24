@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { origenPublico } from "@/lib/origen";
 
 // Refresca la sesión de Supabase y protege /panel.
 export async function proxy(request: NextRequest) {
@@ -23,10 +24,7 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
 
   if (!data?.claims && request.nextUrl.pathname.startsWith("/panel")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/ingresar";
-    url.search = "";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL("/ingresar", origenPublico(request.headers, request.url)));
   }
   return response;
 }
