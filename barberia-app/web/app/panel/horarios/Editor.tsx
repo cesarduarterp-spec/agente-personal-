@@ -2,10 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import HorarioSemanal from "@/components/HorarioSemanal";
 import { abrirFecha, bloquear, guardarHorarios, quitarApertura, quitarBloqueo, type Rango } from "./actions";
 
-const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const ORDEN = [1, 2, 3, 4, 5, 6, 0]; // semana que empieza el lunes
 const campo = "rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900";
 
 type Props = {
@@ -29,14 +28,6 @@ export default function Editor({ barberiaId, timezone, pasoMin, barberos, horari
 
   const rangos = porBarbero[barbero] ?? [];
   const setRangos = (f: (r: Rango[]) => Rango[]) => setPorBarbero((p) => ({ ...p, [barbero]: f(p[barbero] ?? []) }));
-  const franjasDe = (d: number) => rangos.map((r, i) => ({ r, i })).filter(({ r }) => r.dia_semana === d);
-
-  function alternarDia(d: number, activo: boolean) {
-    setRangos((l) => (activo ? [...l, { dia_semana: d, desde: "09:00", hasta: "19:00" }] : l.filter((r) => r.dia_semana !== d)));
-  }
-  function editar(i: number, parche: Partial<Rango>) {
-    setRangos((l) => l.map((r, j) => (j === i ? { ...r, ...parche } : r)));
-  }
 
   function guardar() {
     setMsg(null);
@@ -97,30 +88,7 @@ export default function Editor({ barberiaId, timezone, pasoMin, barberos, horari
       )}
 
       <section className="flex flex-col gap-3">
-        {ORDEN.map((d) => {
-          const franjas = franjasDe(d);
-          return (
-            <div key={d} className="rounded-lg border border-zinc-300 p-3 dark:border-zinc-700">
-              <label className="flex items-center gap-2 font-medium">
-                <input type="checkbox" checked={franjas.length > 0} onChange={(e) => alternarDia(d, e.target.checked)} /> {DIAS[d]}
-                {franjas.length === 0 && <span className="text-sm font-normal text-zinc-500">No atiendo</span>}
-              </label>
-              {franjas.map(({ r, i }) => (
-                <div key={i} className="mt-2 flex items-center gap-2">
-                  <input type="time" value={r.desde} onChange={(e) => editar(i, { desde: e.target.value })} className={campo} aria-label="Desde" />
-                  <span>a</span>
-                  <input type="time" value={r.hasta} onChange={(e) => editar(i, { hasta: e.target.value })} className={campo} aria-label="Hasta" />
-                  {franjas.length > 1 && <button type="button" aria-label="Quitar franja" onClick={() => setRangos((l) => l.filter((_, j) => j !== i))}>✕</button>}
-                </div>
-              ))}
-              {franjas.length > 0 && (
-                <button type="button" className="mt-2 text-sm underline" onClick={() => setRangos((l) => [...l, { dia_semana: d, desde: "15:00", hasta: "19:00" }])}>
-                  + Agregar franja (ej: corte de almuerzo)
-                </button>
-              )}
-            </div>
-          );
-        })}
+        <HorarioSemanal rangos={rangos} onChange={(r) => setRangos(() => r)} />
 
         <label className="flex items-center gap-2 text-sm">
           Un turno cada

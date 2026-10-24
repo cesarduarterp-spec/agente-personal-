@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import DireccionInput, { type Direccion } from "@/components/DireccionInput";
+import HorarioSemanal, { type Franja } from "@/components/HorarioSemanal";
 import { crearBarberia } from "./actions";
 
-const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const campo = "min-w-0 rounded-lg border border-zinc-300 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900";
 const sinDireccion: Direccion = { direccion: "", lat: null, lng: null, place_id: null };
 
@@ -30,9 +30,10 @@ export default function Formulario() {
   const [recargo, setRecargo] = useState("0");
   const [buffer, setBuffer] = useState("20");
   const [servicios, setServicios] = useState<Servicio[]>([{ nombre: "Corte", precio: "", duracion_min: "30" }]);
-  const [dias, setDias] = useState<Record<number, boolean>>({ 1: true, 2: true, 3: true, 4: true, 5: true, 6: true });
-  const [desde, setDesde] = useState("09:00");
-  const [hasta, setHasta] = useState("19:00");
+  // por defecto lunes a sábado, con corte al mediodía (ej: 9 a 14 y 17 a 20)
+  const [rangos, setRangos] = useState<Franja[]>(
+    [1, 2, 3, 4, 5, 6].flatMap((d) => [{ dia_semana: d, desde: "09:00", hasta: "14:00" }, { dia_semana: d, desde: "17:00", hasta: "20:00" }]),
+  );
 
   const conLocal = modo !== "domicilio";
   const conDomicilio = modo !== "local";
@@ -57,7 +58,7 @@ export default function Formulario() {
         recargo_traslado: Number(recargo) || 0,
         buffer_traslado_min: Number(buffer) || 0,
         servicios: servicios.map((s) => ({ nombre: s.nombre, precio: Number(s.precio) || 0, duracion_min: Number(s.duracion_min) })),
-        horarios: DIAS.map((_, d) => d).filter((d) => dias[d]).map((d) => ({ dia_semana: d, desde, hasta })),
+        horarios: rangos,
       });
       if (r.ok) {
         router.push("/panel");
@@ -138,18 +139,8 @@ export default function Formulario() {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">4. Horarios de atención</h2>
-        <div className="flex flex-wrap gap-2">
-          {DIAS.map((n, d) => (
-            <label key={d} className="flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
-              <input type="checkbox" checked={!!dias[d]} onChange={(e) => setDias((x) => ({ ...x, [d]: e.target.checked }))} /> {n}
-            </label>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <input type="time" required value={desde} onChange={(e) => setDesde(e.target.value)} className={campo} />
-          <span>a</span>
-          <input type="time" required value={hasta} onChange={(e) => setHasta(e.target.value)} className={campo} />
-        </div>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">Podés poner más de una franja por día (por ejemplo 9 a 14 y 17 a 20). Después lo podés cambiar en la pestaña Horarios.</p>
+        <HorarioSemanal rangos={rangos} onChange={setRangos} />
       </section>
 
       {error && <p role="alert" className="text-red-700 dark:text-red-400">{error}</p>}

@@ -40,6 +40,12 @@ export async function crearBarberia(input: OnboardingInput): Promise<OnboardingR
   if (input.horarios.some((h) => !HORA.test(h.desde) || !HORA.test(h.hasta) || h.hasta <= h.desde || h.dia_semana < 0 || h.dia_semana > 6))
     return { ok: false, error: "Revisá los horarios: la hora de cierre debe ser posterior a la de apertura." };
 
+  const porDia = Map.groupBy(input.horarios, (h) => h.dia_semana);
+  for (const franjas of porDia.values()) {
+    const orden = [...franjas].sort((a, b) => a.desde.localeCompare(b.desde));
+    if (orden.some((f, i) => i > 0 && f.desde < orden[i - 1].hasta)) return { ok: false, error: "Hay franjas que se superponen en un mismo día." };
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Tu sesión expiró. Ingresá de nuevo." };
