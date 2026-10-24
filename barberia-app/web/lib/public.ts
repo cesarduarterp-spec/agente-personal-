@@ -18,6 +18,7 @@ export const ERRORES: Record<string, string> = {
   turno_no_modificable: "Este turno ya no se puede modificar.",
   turno_no_existe: "No encontramos este turno.",
   barberia_no_existe: "No encontramos esta barbería.",
+  barberia_inactiva: "Esta barbería no está recibiendo reservas por el momento.",
 };
 
 export function mensajeError(message: string | undefined) {

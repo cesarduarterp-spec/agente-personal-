@@ -20,6 +20,9 @@ barberia-app/
 - [x] Configuración: datos de la barbería, modo, zona y traslado, banner de promo, servicios y barberos (alta, edición, activar/desactivar)
 - [x] Agenda: marcar turnos como realizado / no vino / cancelado (avisa al cliente por mail)
 - [x] Fechas especiales abiertas fuera del horario semanal (los bloqueos siempre tienen prioridad)
+- [x] Panel de administrador (`/admin`): usuarios, pagos, estado de cada barbería, cobro manual y configuración — ver `COBROS.md`
+- [x] Planes y cobros: prueba gratis, estado del plan para el barbero, avisos de Lemon Squeezy (USD) con firma verificada
+- [x] Reply-To: el cliente responde los mails y le llega al barbero (y al revés)
 - [x] Cargar un turno a mano (cliente que llama o llega sin reservar), con aviso por mail opcional
 - [x] Recordatorios por mail (24 h y 2 h antes) disparados por n8n — ver `n8n/README.md`
 
@@ -33,12 +36,12 @@ barberia-app/
 ## Probar el esquema localmente
 Requiere un Postgres 14+ (sin Supabase):
 ```bash
-createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql -f supabase/migrations/0004_aperturas.sql -f supabase/migrations/0005_turno_manual.sql -f supabase/migrations/0006_marca_y_mapas.sql
+createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql -f supabase/migrations/0004_aperturas.sql -f supabase/migrations/0005_turno_manual.sql -f supabase/migrations/0006_marca_y_mapas.sql -f supabase/migrations/0007_cobros_y_admin.sql
 psql -d t -At -v ON_ERROR_STOP=1 -f supabase/tests/test.sql | grep -c "^f$"   # debe dar 0 (y verás los "=== ... OK ===")
 ```
 
 ## Puesta en marcha (cuentas tuyas)
-1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`, `0004_aperturas.sql`, `0005_turno_manual.sql` y `0006_marca_y_mapas.sql`.
+1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`, `0004_aperturas.sql`, `0005_turno_manual.sql`, `0006_marca_y_mapas.sql` y `0007_cobros_y_admin.sql`.
    - Authentication → Providers: activar **Email** (con *Confirm email*) y **Google**.
    - Authentication → URL Configuration: *Site URL* = tu dominio; *Redirect URLs* = `https://tudominio.com/auth/callback` (y `http://localhost:3000/auth/callback` para desarrollo).
 2. **Google Cloud**:

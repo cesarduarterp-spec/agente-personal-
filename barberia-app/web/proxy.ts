@@ -23,12 +23,12 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
 
-  if (!data?.claims && request.nextUrl.pathname.startsWith("/panel")) {
+  if (!data?.claims && (request.nextUrl.pathname.startsWith("/panel") || request.nextUrl.pathname.startsWith("/admin"))) {
     return NextResponse.redirect(new URL("/ingresar", origenPublico(request.headers, request.url)));
   }
   return response;
 }
 
 export const config = {
-  matcher: ["/panel/:path*", "/ingresar", "/auth/:path*"],
+  matcher: ["/panel/:path*", "/admin/:path*", "/ingresar", "/auth/:path*"],
 };

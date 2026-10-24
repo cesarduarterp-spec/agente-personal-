@@ -1,29 +1,32 @@
-# Recordatorios por mail con n8n
+# Recordatorios por mail
 
-n8n solo **dispara** el envío cada 10 minutos. La lógica vive en la app (`web/app/api/recordatorios/route.ts`),
-así las plantillas de mail están en un solo lugar y n8n no necesita acceso a la base.
+La lógica vive en la app (`web/app/api/recordatorios/route.ts`): cada vez que algo la llama, reclama de forma
+**atómica** los turnos que necesitan aviso (24 h y 2 h antes), manda el mail por Resend y, si un envío falla,
+lo libera para reintentar. Dos ejecuciones a la vez nunca mandan el mismo aviso dos veces.
 
-Cómo funciona cada corrida:
-1. La app llama a `reclamar_recordatorios('24h')` y `('2h')`. La base devuelve y marca los turnos de forma
-   **atómica**: dos corridas superpuestas nunca mandan el mismo aviso dos veces.
-2. Envía el mail (Resend) a cada cliente.
-3. Si un envío falla, llama a `liberar_recordatorio` y se reintenta en la próxima corrida.
+Reglas: el aviso de 24 h sale entre 24 h y 3 h antes del turno; el de 2 h, entre 2 h y 0 h antes. No se manda un
+aviso si el turno se reservó con menos tiempo que ese aviso (ya recibió la confirmación). El cliente puede
+responder el mail: la respuesta le llega al barbero (*Reply-To*).
 
-Reglas: el aviso de 24 h sale entre 24 h y 3 h antes del turno; el de 2 h, entre 2 h y 0 h antes.
-No se manda un aviso si el turno se reservó con menos tiempo que el del aviso (ya recibió la confirmación).
+## Opción A (recomendada): tarea programada de Coolify
+No necesita n8n ni `curl`. Corre **dentro del contenedor de la app**, así el secreto nunca queda escrito en la tarea.
 
-## Puesta en marcha
-1. **n8n en el VPS** (Coolify → *New Resource* → n8n). Si sigue en tu PC, los recordatorios no salen cuando se apaga.
-2. En la app (Coolify) definir `CRON_SECRET` con un valor largo y aleatorio (`openssl rand -hex 32`).
-   Sin esa variable el endpoint responde 503 (deshabilitado).
-3. En n8n → *Credentials* → **Header Auth**: nombre `Authorization`, valor `Bearer <tu CRON_SECRET>`.
-4. Importar `recordatorios.json` (*Workflows → Import from file*), cambiar la URL por la de tu dominio,
-   asignar la credencial en el nodo *Enviar recordatorios* y **activar** el workflow.
-5. Probarlo: botón *Execute workflow*. La respuesta es `{"ok":true,"resumen":{"24h":{...},"2h":{...}}}`.
+Coolify → tu aplicación → **Scheduled Tasks** → **Add**:
+- **Name:** `recordatorios`
+- **Command:**
+  ```
+  node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/recordatorios',{method:'POST',headers:{authorization:'Bearer '+process.env.CRON_SECRET}}).then(async r=>{console.log(r.status,await r.text());process.exit(r.ok?0:1)}).catch(e=>{console.error('ERROR',e.message);process.exit(1)})"
+  ```
+- **Frequency:** `*/10 * * * *` (cada 10 minutos)
+- **Container:** el de la app (si te pide elegir, dejá el único que aparece)
 
-> El JSON está escrito a mano según el formato de n8n y no pudo importarse en esta sesión: si n8n objeta algo al
-> importar, alcanza con crear a mano dos nodos (*Schedule Trigger* cada 10 min → *HTTP Request* POST con Header Auth).
+Requisito: la variable `CRON_SECRET` cargada en la app (la misma que ya tenés). Probado: con el secreto correcto
+responde `200 {"ok":true,"resumen":...}`; con uno incorrecto responde `401` y sale con error.
 
-Alternativa sin n8n: cualquier cron que ejecute
-`curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://TU-DOMINIO/api/recordatorios` cada 10 minutos
-(por ejemplo, una *Scheduled Task* de Coolify).
+Para probarlo a mano: en la tarea, botón **Execute now** y mirá la ejecución en el historial.
+
+## Opción B: n8n
+Importá `recordatorios.json` (Workflows → Import from file): *Schedule Trigger* cada 10 minutos → *HTTP Request* POST a
+`https://agenda.wameta.app/api/recordatorios` con una credencial **Header Auth** (`Authorization: Bearer <CRON_SECRET>`).
+El n8n tiene que correr en el VPS (si corre en tu PC y se apaga, no salen los avisos).
+> El JSON está escrito a mano y no se pudo importar en una instalación real: si n8n objeta algo, armá los dos nodos a mano.

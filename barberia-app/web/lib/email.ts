@@ -6,23 +6,28 @@ import { fmtFechaHora } from "@/lib/public";
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const utc = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
-export async function enviarMail(to: string, subject: string, html: string, ics?: string) {
+export async function enviarMail(to: string, subject: string, html: string, ics?: string, replyTo?: string | null) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn(`[mail] RESEND_API_KEY no configurada; no se envió "${subject}" a ${to}`);
     return false;
   }
-  const r = await fetch(process.env.RESEND_API_URL ?? "https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: process.env.MAIL_FROM ?? "Reservas <reservas@example.com>",
-      to,
-      subject,
-      html,
-      attachments: ics ? [{ filename: "turno.ics", content: Buffer.from(ics).toString("base64") }] : undefined,
-    }),
-  });
+  const enviar = (conReplyTo: boolean) =>
+    fetch(process.env.RESEND_API_URL ?? "https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: process.env.MAIL_FROM ?? "Reservas <reservas@example.com>",
+        to,
+        subject,
+        html,
+        ...(conReplyTo && replyTo ? { reply_to: replyTo } : {}),
+        attachments: ics ? [{ filename: "turno.ics", content: Buffer.from(ics).toString("base64") }] : undefined,
+      }),
+    });
+  let r = await enviar(true);
+  // si Resend rechaza el Reply-To, el mail sale igual (sin él): nunca se pierde una confirmación por eso
+  if (!r.ok && replyTo && (r.status === 400 || r.status === 422)) r = await enviar(false);
   if (!r.ok) console.error("[mail] Resend respondió", r.status);
   return r.ok;
 }
@@ -77,8 +82,8 @@ export async function enviarConfirmaciones(r: Reserva) {
     ${r.indicaciones ? `<p>Indicaciones: ${esc(r.indicaciones)}</p>` : ""}</div>`;
 
   const [alCliente] = await Promise.allSettled([
-    enviarMail(r.cliente.email, `Turno confirmado: ${cuando}`, htmlCliente, ics),
-    r.email_barbero ? enviarMail(r.email_barbero, `Nueva reserva: ${nombreCliente} · ${cuando}`, htmlBarbero) : Promise.resolve(),
+    enviarMail(r.cliente.email, `Turno confirmado: ${cuando}`, htmlCliente, ics, r.email_barbero),
+    r.email_barbero ? enviarMail(r.email_barbero, `Nueva reserva: ${nombreCliente} · ${cuando}`, htmlBarbero, undefined, r.cliente.email) : Promise.resolve(),
   ]);
   return alCliente.status === "fulfilled" && alCliente.value === true;
 }
@@ -89,7 +94,7 @@ export type Recordatorio = {
   gestion_token: string; direccion_turno: string | null;
   cliente_nombre: string; cliente_email: string | null; servicio: string; barbero: string;
   barberia: string; timezone: string; direccion_local: string | null; lat: number | null; lng: number | null;
-  lat_turno: number | null; lng_turno: number | null; color?: string; logo_path?: string | null;
+  lat_turno: number | null; lng_turno: number | null; color?: string; logo_path?: string | null; email_barbero?: string | null;
 };
 
 export async function enviarRecordatorio(r: Recordatorio) {
@@ -108,5 +113,5 @@ export async function enviarRecordatorio(r: Recordatorio) {
     ${lugar ? `<p>${r.modalidad === "local" ? "📍" : "🏠"} ${esc(lugar)}${mapaUrl ? `<br><a href="${mapaUrl}">Ver en Google Maps</a>` : ""}</p>` : ""}
     <p>${boton(link, "Reprogramar o cancelar", color)}</p>
     <p style="color:#666;font-size:13px">¿No podés venir? Avisanos con tiempo así otra persona puede aprovechar el horario.</p></div>`;
-  return enviarMail(r.cliente_email, `${titulo}: ${cuando}`, html);
+  return enviarMail(r.cliente_email, `${titulo}: ${cuando}`, html, undefined, r.email_barbero);
 }

@@ -14,7 +14,7 @@ export type Perfil = {
   slug: string; nombre: string; modo: "local" | "domicilio" | "ambos";
   direccion: string | null; lat: number | null; lng: number | null;
   radio_cobertura_km: number | null; recargo_traslado: number | null;
-  horas_min_cancelacion: number; banner: string | null; timezone: string; color: string; logo_path: string | null;
+  horas_min_cancelacion: number; banner: string | null; timezone: string; color: string; logo_path: string | null; habilitada?: boolean;
   barberos: { id: string; nombre: string }[];
   servicios: { id: string; nombre: string; precio: number; duracion_min: number }[];
 };
@@ -120,9 +120,12 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
           </a>
         )}
       </CabeceraMarca>
+      {perfil.habilitada === false && (
+        <p role="status" className="rounded-lg bg-red-100 p-4 text-red-900">Esta barbería no está recibiendo reservas por el momento. Contactala directamente.</p>
+      )}
       {perfil.banner && <p className="rounded-lg bg-amber-100 p-3 text-amber-900">{perfil.banner}</p>}
 
-      <form onSubmit={enviar} className="flex flex-col gap-6">
+      <form onSubmit={enviar} className={`flex flex-col gap-6 ${perfil.habilitada === false ? "pointer-events-none opacity-40" : ""}`} inert={perfil.habilitada === false}>
         <section className="flex flex-col gap-2">
           <h2 className="font-medium">1. Servicio</h2>
           {servicios.map((s) => (

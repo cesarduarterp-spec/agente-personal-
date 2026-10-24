@@ -245,3 +245,110 @@ set role service_role;
 select (select count(*) from reclamar_recordatorios('24h') r where (r ->> 'lat_turno')::float = -34.61 and r ->> 'color' = '#b45309') = 1 as recordatorio_con_coordenadas_y_color;
 reset role;
 \echo === MARCA OK ===
+
+-- 15. cobros: el dueño no puede escribir su estado de suscripción ni sus pagos
+select count(*) = 1 as trial_creado_por_trigger from suscripciones where barberia_id = :'barberia' and estado = 'prueba';
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select count(*) = 1 as dueno_ve_su_suscripcion from suscripciones;
+select pg_temp.expect_error(format($q$update suscripciones set estado = 'activa' where barberia_id = '%s'$q$, :'barberia'), 'permission denied');
+select pg_temp.expect_error(format($q$insert into pagos (barberia_id, monto, moneda) values ('%s', 1, 'USD')$q$, :'barberia'), 'permission denied');
+select pg_temp.expect_error($q$select * from administradores$q$, 'permission denied');
+select pg_temp.expect_error($q$select admin_resumen()$q$, 'no_autorizado');
+select pg_temp.expect_error($q$select admin_usuarios()$q$, 'no_autorizado');
+select pg_temp.expect_error(format($q$select admin_registrar_pago('%s', 1, 'USD', 'x', 'x', 1)$q$, :'barberia'), 'no_autorizado');
+select es_admin() = false as dueno_no_es_admin;
+reset role;
+set request.jwt.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select count(*) = 1 as otro_dueno_solo_su_suscripcion from suscripciones;
+reset role;
+
+-- 16. admin: ve a todos (incluidos los que no armaron su barbería), cobra a mano, suspende
+insert into auth.users (id, email) values ('99999999-9999-9999-9999-999999999999', 'admin@x.com'), ('88888888-8888-8888-8888-888888888888', 'abandono@x.com');
+insert into administradores (user_id) values ('99999999-9999-9999-9999-999999999999');
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select es_admin() as admin_reconocido;
+select (admin_resumen() ->> 'sin_barberia')::int >= 2 as resumen_cuenta_sin_barberia;
+select count(*) >= 4 as admin_ve_a_todos from admin_usuarios();
+select count(*) = 1 as admin_ve_al_que_abandono from admin_usuarios('abandono', 'sin_barberia');
+select count(*) = 1 as admin_busca_por_slug from admin_usuarios('juan-barber');
+select admin_registrar_pago(:'barberia', 15, 'USD', 'transferencia', 'pago de prueba', 1) ->> 'ok' as pago_registrado;
+select pg_temp.expect_error(format($q$select admin_registrar_pago('%s', 15, 'USD', 'x', 'x', 0)$q$, :'barberia'), 'meses_invalidos');
+select (admin_pagos() -> 0 ->> 'monto')::numeric = 15 as admin_ve_pago;
+select admin_extender_prueba(:'barberia', 10) ->> 'ok' as prueba_extendida;
+reset role;
+select estado = 'prueba' as extender_vuelve_a_prueba from suscripciones where barberia_id = :'barberia';
+
+-- 17. habilitación: el cobro está apagado por defecto; suspendida siempre bloquea; vencida solo con cobro activo
+select (:'dia'::date + 12 + time '15:00') at time zone 'America/Argentina/Buenos_Aires' as h15 \gset
+select barberia_habilitada(:'barberia') as habilitada_con_cobro_apagado;
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select admin_cambiar_estado(:'barberia', 'suspendida', 'abuso') ->> 'ok' as suspendida;
+reset role;
+select barberia_habilitada(:'barberia') = false as suspendida_bloquea;
+set role anon;
+select (perfil_publico('juan-barber') ->> 'habilitada')::boolean = false as perfil_informa_inactiva;
+reset role;
+set role service_role;
+select pg_temp.expect_error(format($q$select crear_reserva('juan-barber', '%s', '%s', '%s', 'local', 'X','Y','1','z@z.com',null,null,null,null,true)$q$, :'barbero', :'servicio', :'h15'), 'barberia_inactiva');
+reset role;
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select admin_cambiar_estado(:'barberia', 'prueba') ->> 'ok' as reactivada;
+select (admin_config(true) ->> 'cobro_activo')::boolean as cobro_activado;
+reset role;
+update suscripciones set prueba_hasta = now() - interval '1 day' where barberia_id = :'barberia';
+select barberia_habilitada(:'barberia') = false as prueba_vencida_bloquea_con_cobro_activo;
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select admin_registrar_pago(:'barberia', 15, 'USD', 'transferencia', null, 1) ->> 'ok' as cobrado;
+select admin_config(false) ->> 'cobro_activo' as cobro_apagado_otra_vez;
+reset role;
+select barberia_habilitada(:'barberia') as habilitada_tras_pago;
+
+-- 18. eventos del proveedor: idempotentes, sin retroceder fechas ni pisar suspensiones
+select periodo_hasta as ph_actual from suscripciones where barberia_id = :'barberia' \gset
+set role service_role;
+select (registrar_evento_cobro('lemonsqueezy', 'evt1', 'subscription_payment_success', :'barberia', 'activa', now() + interval '60 days', 'cli1', 'sub1', 'pay1', 15, 'USD') ->> 'duplicado') is null as evento_nuevo;
+select (registrar_evento_cobro('lemonsqueezy', 'evt1', 'subscription_payment_success', :'barberia', 'activa', now() + interval '60 days', 'cli1', 'sub1', 'pay1', 15, 'USD') ->> 'duplicado')::boolean as evento_duplicado_ignorado;
+select registrar_evento_cobro('lemonsqueezy', 'evt0', 'subscription_updated', :'barberia', 'activa', now() + interval '1 day', null, 'sub1') ->> 'ok' as evento_atrasado;
+reset role;
+select count(*) = 1 as un_solo_pago_del_proveedor from pagos where proveedor = 'lemonsqueezy';
+select periodo_hasta > now() + interval '55 days' as fecha_no_retrocede from suscripciones where barberia_id = :'barberia';
+update suscripciones set estado = 'suspendida' where barberia_id = :'barberia';
+set role service_role;
+select registrar_evento_cobro('lemonsqueezy', 'evt2', 'subscription_updated', :'barberia', 'activa', now() + interval '90 days', null, 'sub1') ->> 'ok' as evento_sobre_suspendida;
+reset role;
+select estado = 'suspendida' as suspension_del_admin_se_respeta from suscripciones where barberia_id = :'barberia';
+update suscripciones set estado = 'activa' where barberia_id = :'barberia';
+
+-- 19. recordatorios incluyen el mail del barbero (para Reply-To)
+select (:'dia'::date + 14 + time '10:00') at time zone 'America/Argentina/Buenos_Aires' as h10 \gset
+set role service_role;
+select (crear_reserva('juan-barber', :'barbero', :'servicio', :'h10', 'local', 'Rep','Ly','11 3333-0000','reply@x.com',null,null,null,null,true) ->> 'email_barbero') = 'duenio1@x.com' as reserva_trae_mail_del_barbero;
+reset role;
+update turnos set inicio = now() + interval '23 hours', fin = now() + interval '23 hours 30 minutes', ocupa_hasta = now() + interval '23 hours 30 minutes', agendado_at = now() - interval '2 days'
+  where cliente_id = (select id from clientes where email = 'reply@x.com');
+set role service_role;
+select (select count(*) from reclamar_recordatorios('24h') r where r ->> 'email_barbero' = 'duenio1@x.com') = 1 as recordatorio_trae_mail_del_barbero;
+reset role;
+\echo === COBROS OK ===
+
+-- 20. mi_plan (lo que ve el dueño) y avisos sin dato propio
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select (mi_plan() ->> 'estado') is not null and (mi_plan() ->> 'cobro_activo') = 'false' as mi_plan_propio;
+reset role;
+set request.jwt.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select (mi_plan() ->> 'barberia_id') <> :'barberia' as mi_plan_no_mezcla_barberias;
+reset role;
+set role service_role;
+select registrar_evento_cobro('lemonsqueezy', 'evt3', 'subscription_payment_success', null, 'activa', now() + interval '120 days', null, 'sub1', 'pay2', 15, 'USD') ->> 'ok' as aviso_resuelto_por_suscripcion;
+select pg_temp.expect_error($q$select registrar_evento_cobro('lemonsqueezy', 'evt4', 'x', null, 'activa', now(), null, 'sub-desconocida')$q$, 'barberia_no_existe');
+reset role;
+select count(*) = 2 as dos_pagos_del_proveedor from pagos where proveedor = 'lemonsqueezy';
+\echo === PLAN OK ===
