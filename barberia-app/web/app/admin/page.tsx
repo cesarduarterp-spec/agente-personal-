@@ -29,7 +29,7 @@ export default async function Resumen() {
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
       <h1 className="text-2xl font-semibold">Resumen</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Cobro automático: <b>{r.cobro_activo ? "ACTIVADO" : "apagado"}</b> (si está apagado, ninguna barbería se bloquea por falta de pago).{" "}
+        Exigir el pago: <b>{r.cobro_activo ? "ENCENDIDO" : "apagado"}</b> ({r.cobro_activo ? "las barberías sin pago se bloquean pasados los días de gracia" : "ninguna barbería se bloquea por falta de pago"}).{" "}
         <Link className="underline" href="/admin/configuracion">Cambiar</Link>
       </p>
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -13,7 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href="/admin" className={link}>Resumen</Link>
         <Link href="/admin/usuarios" className={link}>Usuarios</Link>
         <Link href="/admin/pagos" className={link}>Pagos</Link>
-        <Link href="/admin/configuracion" className={link}>Cobro</Link>
+        <Link href="/admin/configuracion" className={link}>Plazos</Link>
         <Link href="/panel" className={`${link} ml-auto`}>Mi panel</Link>
       </nav>
       {children}

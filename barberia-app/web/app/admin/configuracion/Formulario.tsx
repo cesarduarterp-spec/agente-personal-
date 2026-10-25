@@ -18,7 +18,7 @@ export default function Formulario({ inicial }: { inicial: { cobro_activo: boole
 
   function guardar(e: React.FormEvent) {
     e.preventDefault();
-    if (activo && !inicial.cobro_activo && !confirm("Al activar el cobro, las barberías con la prueba vencida o sin pago dejan de recibir reservas (después de los días de gracia). ¿Seguro?")) return;
+    if (activo && !inicial.cobro_activo && !confirm("Al exigir el pago, las barberías con la prueba vencida o sin pago dejan de recibir reservas (después de los días de gracia). ¿Seguro?")) return;
     setMsg(null);
     iniciar(async () => {
       const r = await guardarConfigCobro(activo, Number(prueba), Number(gracia), precio, instrucciones);
@@ -30,7 +30,8 @@ export default function Formulario({ inicial }: { inicial: { cobro_activo: boole
   return (
     <form onSubmit={guardar} className="flex flex-col gap-4">
       <label className="flex items-center gap-2 rounded-lg border border-zinc-300 p-3 font-medium dark:border-zinc-700">
-        <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} /> Cobro automático activado
+        <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} />
+        <span>Exigir el pago<span className="block text-sm font-normal text-zinc-600 dark:text-zinc-400">Si está encendido, una barbería con la prueba vencida o sin pago deja de recibir reservas (pasados los días de gracia). Si está apagado, nadie se bloquea. El pago siempre lo registrás vos a mano.</span></span>
       </label>
       <label className="flex flex-col gap-1 text-sm">Días de prueba gratis para barberías nuevas
         <input type="number" min="0" max="365" value={prueba} onChange={(e) => setPrueba(e.target.value)} className={campo} /></label>

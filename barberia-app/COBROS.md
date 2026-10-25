@@ -4,7 +4,7 @@
 - Cada barbería nueva arranca con una **prueba gratis** (30 días, configurable en `/admin/configuracion`).
 - El estado del plan vive en tablas aparte (`suscripciones`, `pagos`): el barbero **solo puede leerlas**; solo el
   administrador o el proveedor de pagos (webhook) las modifican.
-- El **cobro automático viene APAGADO**: mientras esté apagado, ninguna barbería se bloquea por falta de pago
+- **Exigir el pago viene APAGADO** (no cobra nada solo: los pagos los registrás vos a mano). Mientras esté apagado, ninguna barbería se bloquea por falta de pago
   (solo las que vos suspendas a mano). Cuando lo actives, una barbería con la prueba vencida o sin pago deja de
   recibir reservas después de los días de gracia (7 por defecto) y se le avisa en el panel.
 
@@ -22,7 +22,7 @@ Después aparece el link **Admin** en tu panel (`/admin`). Para cualquier otra p
 - **Gestionar** una barbería: registrar un pago a mano (transferencia, Mercado Pago, efectivo → activa el plan por N
   meses), extender la prueba, cambiar el estado o suspender.
 - **Pagos:** historial y total.
-- **Cobro:** activar/apagar el cobro automático, días de prueba y de gracia.
+- **Plazos:** exigir el pago o no, días de prueba y de gracia, precio e instrucciones de pago.
 
 ## Cobro en pesos por transferencia o link de Mercado Pago (el que se usa hoy)
 1. En `/admin/configuracion` escribí el **precio** y las **instrucciones de pago** (alias o CBU, link de Mercado Pago,
@@ -30,7 +30,7 @@ Después aparece el link **Admin** en tu panel (`/admin`). Para cualquier otra p
 2. En `/admin/usuarios`, el filtro **Por vencer (7 días)** te muestra a quién cobrarle esta semana.
 3. Cuando te llega un pago: **Gestionar** esa barbería → **Registrar un pago** (monto, moneda, método, meses que cubre).
    El plan queda **Pagando** y se suma ese tiempo a lo que ya tuviera pagado.
-4. Con el cobro automático **apagado** nadie se bloquea; cuando lo actives, una barbería sin pago deja de recibir
+4. Con **Exigir el pago** apagado nadie se bloquea; cuando lo enciendas, una barbería sin pago deja de recibir
    reservas después de los días de gracia, y el barbero lo ve en un aviso rojo en su panel.
 
 Como no se conecta con Mercado Pago, **el pago no se detecta solo**: lo registrás vos. Si el volumen crece, el paso
