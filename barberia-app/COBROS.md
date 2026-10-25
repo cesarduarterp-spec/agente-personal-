@@ -24,7 +24,19 @@ Después aparece el link **Admin** en tu panel (`/admin`). Para cualquier otra p
 - **Pagos:** historial y total.
 - **Cobro:** activar/apagar el cobro automático, días de prueba y de gracia.
 
-## Cobrar en dólares con Lemon Squeezy
+## Cobro en pesos por transferencia o link de Mercado Pago (el que se usa hoy)
+1. En `/admin/configuracion` escribí el **precio** y las **instrucciones de pago** (alias o CBU, link de Mercado Pago,
+   a dónde mandar el comprobante). Cada barbero las ve en **Mi plan**; los links se vuelven clickeables.
+2. En `/admin/usuarios`, el filtro **Por vencer (7 días)** te muestra a quién cobrarle esta semana.
+3. Cuando te llega un pago: **Gestionar** esa barbería → **Registrar un pago** (monto, moneda, método, meses que cubre).
+   El plan queda **Pagando** y se suma ese tiempo a lo que ya tuviera pagado.
+4. Con el cobro automático **apagado** nadie se bloquea; cuando lo actives, una barbería sin pago deja de recibir
+   reservas después de los días de gracia, y el barbero lo ve en un aviso rojo en su panel.
+
+Como no se conecta con Mercado Pago, **el pago no se detecta solo**: lo registrás vos. Si el volumen crece, el paso
+siguiente es una suscripción automática con Mercado Pago (cobro mensual con aviso de cada pago al sistema).
+
+## Cobrar en dólares con Lemon Squeezy (opcional, para clientes fuera de Argentina)
 Lemon Squeezy actúa como "merchant of record": cobra al cliente, se ocupa de los impuestos de venta y te paga a vos.
 Según su página oficial, **Argentina figura entre los países con pago por transferencia bancaria (en USD)**, y también
 ofrece PayPal. Los pagos se liquidan dos veces por mes (los días 1 y 15). Tiene comisiones por venta y por retiro:

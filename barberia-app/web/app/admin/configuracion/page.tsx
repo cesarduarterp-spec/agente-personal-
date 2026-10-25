@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function ConfigCobro() {
   const { supabase } = await cargarAdmin();
   const { data } = await supabase.rpc("admin_config"); // sin parámetros: solo lee
-  const c = data as { cobro_activo: boolean; dias_prueba: number; dias_gracia: number };
+  const c = data as { cobro_activo: boolean; dias_prueba: number; dias_gracia: number; precio_texto: string | null; instrucciones_pago: string | null };
   return (
     <main className="mx-auto w-full max-w-xl flex-1 px-4 py-8">
       <h1 className="text-2xl font-semibold">Cobro</h1>

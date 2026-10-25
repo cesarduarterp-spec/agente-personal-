@@ -4,7 +4,7 @@ import { dinero, fecha } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-const FILTROS: [string, string][] = [["", "Todos"], ["prueba", "En prueba"], ["activa", "Pagando"], ["vencida", "Vencidas"], ["suspendida", "Suspendidas"], ["sin_barberia", "Sin barbería"]];
+const FILTROS: [string, string][] = [["", "Todos"], ["por_vencer", "Por vencer (7 días)"], ["prueba", "En prueba"], ["activa", "Pagando"], ["vencida", "Vencidas"], ["suspendida", "Suspendidas"], ["sin_barberia", "Sin barbería"]];
 
 export default async function Usuarios({ searchParams }: PageProps<"/admin/usuarios">) {
   const { supabase } = await cargarAdmin();

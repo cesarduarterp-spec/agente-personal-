@@ -352,3 +352,30 @@ select pg_temp.expect_error($q$select registrar_evento_cobro('lemonsqueezy', 'ev
 reset role;
 select count(*) = 2 as dos_pagos_del_proveedor from pagos where proveedor = 'lemonsqueezy';
 \echo === PLAN OK ===
+
+-- 21. cobro manual: precio e instrucciones configurables, filtro "por vencer"
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select (admin_config(null, null, null, 'ARS 20.000 por mes', E'Alias: wameta.cobros\nMandá el comprobante') ->> 'precio_texto') = 'ARS 20.000 por mes' as precio_guardado;
+select (admin_config() ->> 'instrucciones_pago') like 'Alias: wameta.cobros%' and (admin_config() ->> 'precio_texto') is not null as config_se_conserva_si_no_se_toca;
+select pg_temp.expect_error($q$select admin_config(true, 400)$q$, 'dias_prueba_check');
+reset role;
+set request.jwt.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select (mi_plan() ->> 'precio_texto') = 'ARS 20.000 por mes' and (mi_plan() ->> 'instrucciones_pago') like '%comprobante%' as barbero_ve_instrucciones;
+select pg_temp.expect_error($q$select admin_config(null, null, null, 'x', 'y')$q$, 'no_autorizado');
+reset role;
+update suscripciones set estado = 'activa', periodo_hasta = now() + interval '3 days' where barberia_id = :'barberia';
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select count(*) = 1 as por_vencer_encuentra_la_que_vence_en_3_dias from admin_usuarios('', 'por_vencer');
+select count(*) >= 1 and bool_and((x ->> 'estado') = 'activa') as filtro_activa_sigue_andando from admin_usuarios('', 'activa') x;
+reset role;
+update suscripciones set periodo_hasta = now() + interval '40 days' where barberia_id = :'barberia';
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select count(*) = 0 as por_vencer_ignora_la_que_vence_en_40_dias from admin_usuarios('', 'por_vencer');
+select admin_config(false, null, null, '', '') is not null as config_se_puede_borrar;
+reset role;
+select precio_texto is null and instrucciones_pago is null as config_borrada from configuracion_cobro;
+\echo === MANUAL-COBRO OK ===

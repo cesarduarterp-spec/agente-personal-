@@ -36,12 +36,12 @@ barberia-app/
 ## Probar el esquema localmente
 Requiere un Postgres 14+ (sin Supabase):
 ```bash
-createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql -f supabase/migrations/0004_aperturas.sql -f supabase/migrations/0005_turno_manual.sql -f supabase/migrations/0006_marca_y_mapas.sql -f supabase/migrations/0007_cobros_y_admin.sql
+createdb t && psql -d t -f supabase/tests/stubs.sql && psql -d t -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql -f supabase/migrations/0002_fichas_horarios.sql -f supabase/migrations/0003_busqueda_fichas.sql -f supabase/migrations/0004_aperturas.sql -f supabase/migrations/0005_turno_manual.sql -f supabase/migrations/0006_marca_y_mapas.sql -f supabase/migrations/0007_cobros_y_admin.sql -f supabase/migrations/0008_cobro_manual.sql
 psql -d t -At -v ON_ERROR_STOP=1 -f supabase/tests/test.sql | grep -c "^f$"   # debe dar 0 (y verás los "=== ... OK ===")
 ```
 
 ## Puesta en marcha (cuentas tuyas)
-1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`, `0004_aperturas.sql`, `0005_turno_manual.sql`, `0006_marca_y_mapas.sql` y `0007_cobros_y_admin.sql`.
+1. **Supabase**: crear el proyecto y ejecutar en el SQL Editor, en orden, `0001_init.sql`, `0002_fichas_horarios.sql` y `0003_busqueda_fichas.sql`, `0004_aperturas.sql`, `0005_turno_manual.sql`, `0006_marca_y_mapas.sql`, `0007_cobros_y_admin.sql` y `0008_cobro_manual.sql`.
    - Authentication → Providers: activar **Email** (con *Confirm email*) y **Google**.
    - Authentication → URL Configuration: *Site URL* = tu dominio; *Redirect URLs* = `https://tudominio.com/auth/callback` (y `http://localhost:3000/auth/callback` para desarrollo).
 2. **Google Cloud**:

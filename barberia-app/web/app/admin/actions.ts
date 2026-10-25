@@ -38,9 +38,11 @@ export async function cambiarEstado(barberiaId: string, estado: string, nota: st
   return { ok: true };
 }
 
-export async function guardarConfigCobro(cobroActivo: boolean, diasPrueba: number, diasGracia: number): Promise<R> {
+export async function guardarConfigCobro(cobroActivo: boolean, diasPrueba: number, diasGracia: number, precio: string, instrucciones: string): Promise<R> {
   if (!Number.isInteger(diasPrueba) || !Number.isInteger(diasGracia)) return { ok: false, error: "Los días deben ser números enteros." };
-  const { error } = await (await createClient()).rpc("admin_config", { p_cobro_activo: cobroActivo, p_dias_prueba: diasPrueba, p_dias_gracia: diasGracia });
+  const { error } = await (await createClient()).rpc("admin_config", {
+    p_cobro_activo: cobroActivo, p_dias_prueba: diasPrueba, p_dias_gracia: diasGracia, p_precio_texto: precio, p_instrucciones: instrucciones,
+  });
   if (error) return { ok: false, error: "No se pudo guardar (revisá los valores)." };
   revalidatePath("/admin", "layout");
   return { ok: true };

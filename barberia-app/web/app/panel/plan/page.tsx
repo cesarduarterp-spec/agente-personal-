@@ -3,7 +3,12 @@ import { dinero, fecha, fechaHora } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-type Plan = { barberia_id: string; estado: string; prueba_hasta: string | null; periodo_hasta: string | null; proveedor: string; habilitada: boolean; cobro_activo: boolean };
+type Plan = { barberia_id: string; estado: string; prueba_hasta: string | null; periodo_hasta: string | null; proveedor: string; habilitada: boolean; cobro_activo: boolean; precio_texto: string | null; instrucciones_pago: string | null };
+
+// los links del texto se vuelven clickeables (solo http/https)
+function ConLinks({ texto }: { texto: string }) {
+  return <>{texto.split(/(https?:\/\/[^\s]+)/g).map((t, i) => (/^https?:\/\//.test(t) ? <a key={i} href={t} target="_blank" rel="noreferrer" className="underline">{t}</a> : t))}</>;
+}
 const ESTADOS: Record<string, string> = { prueba: "Prueba gratis", activa: "Plan activo", vencida: "Vencido", cancelada: "Cancelado", suspendida: "Suspendido" };
 
 export default async function MiPlan() {
@@ -14,7 +19,7 @@ export default async function MiPlan() {
   ]);
   const plan = p as Plan | null;
   const checkout = process.env.LEMONSQUEEZY_CHECKOUT_URL;
-  const precio = process.env.PLAN_PRECIO;
+  const precio = plan?.precio_texto || process.env.PLAN_PRECIO;
   const contacto = process.env.CONTACTO_EMAIL;
   // la barbería viaja en el link para asociar el pago; el proveedor la devuelve en el aviso
   const link = checkout ? `${checkout}${checkout.includes("?") ? "&" : "?"}checkout[custom][barberia_id]=${encodeURIComponent(barberia.id)}&checkout[email]=${encodeURIComponent(user.email ?? "")}` : null;
@@ -35,17 +40,22 @@ export default async function MiPlan() {
       )}
 
       <section className="mt-6">
-        <h2 className="text-lg font-medium">Suscribirme{precio ? ` · ${precio}` : ""}</h2>
-        {link ? (
+        <h2 className="text-lg font-medium">{link ? "Suscribirme" : "Cómo pagar"}{precio ? ` · ${precio}` : ""}</h2>
+        {plan?.instrucciones_pago && (
+          <p className="mt-2 whitespace-pre-line rounded-lg border border-zinc-300 p-4 text-sm dark:border-zinc-700"><ConLinks texto={plan.instrucciones_pago} /></p>
+        )}
+        {link && (
           <>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">El pago se hace en una página segura del procesador de pagos. Cuando se acredita, tu plan se activa solo.</p>
-            <a href={link} className="mt-3 inline-block rounded-lg bg-zinc-900 px-5 py-3 font-medium text-white dark:bg-white dark:text-zinc-900">Suscribirme</a>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">También podés pagar con tarjeta, en una página segura del procesador de pagos. Cuando se acredita, tu plan se activa solo.</p>
+            <a href={link} className="mt-3 inline-block rounded-lg bg-zinc-900 px-5 py-3 font-medium text-white dark:bg-white dark:text-zinc-900">Suscribirme con tarjeta</a>
           </>
-        ) : (
+        )}
+        {!link && !plan?.instrucciones_pago && (
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             {contacto ? <>Para activar tu plan escribinos a <a className="underline" href={`mailto:${contacto}`}>{contacto}</a>.</> : "Pronto vas a poder suscribirte desde acá."}
           </p>
         )}
+        {plan?.instrucciones_pago && <p className="mt-2 text-xs text-zinc-500">Cuando recibamos tu pago, tu plan se activa y lo ves reflejado acá.</p>}
       </section>
 
       <section className="mt-8">
