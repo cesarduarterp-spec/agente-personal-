@@ -1,0 +1,82 @@
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/space-grotesk/700.css';
+@import 'driver.js/dist/driver.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-white text-black font-sans antialiased;
+    font-weight: 500;
+  }
+  h1, h2, h3, .font-display {
+    font-family: 'Space Grotesk', Inter, system-ui, sans-serif;
+    /* Space Grotesk llega a 700: pedimos 900 y el navegador usa el más pesado disponible. */
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+  :focus-visible {
+    outline: 3px solid #000000;
+    outline-offset: 2px;
+  }
+  /* Sobre superficies negras el anillo pasa a amarillo para seguir siendo visible. */
+  .on-dark :focus-visible { outline-color: #FFE600; }
+  input, select, textarea { font: inherit; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 border-2 border-black bg-white px-3 py-2 text-sm font-bold leading-none
+      transition-transform select-none whitespace-nowrap min-h-[40px];
+  }
+  .btn:hover:not(:disabled) { @apply bg-yellow; }
+  .btn:active:not(:disabled) { transform: translate(1px, 1px); }
+  /* Deshabilitado sin grises: borde discontinuo y fondo blanco. */
+  .btn:disabled { @apply cursor-not-allowed border-dashed bg-white text-black; }
+  .btn-primary { @apply bg-blue text-white border-black; }
+  .btn-primary:hover:not(:disabled) { @apply bg-black text-yellow; }
+  .btn-danger { @apply bg-black text-yellow; }
+  .btn-danger:hover:not(:disabled) { @apply bg-yellow text-black; }
+  .btn-icon { @apply px-2; min-width: 40px; }
+  .btn-ghost { @apply border-transparent; }
+  .btn-ghost:hover:not(:disabled) { @apply border-black; }
+
+  .field { @apply block w-full border-2 border-black bg-white px-3 py-2 text-sm min-h-[40px]; }
+  .field[aria-invalid='true'] { @apply bg-heat1; border-style: dashed; }
+  .label { @apply mb-1 block text-xs font-bold uppercase tracking-wide; }
+  .error-text { @apply mt-1 text-xs font-bold; }
+  .error-text::before { content: '⚠ '; }
+
+  .card { @apply border-2 border-black bg-white; }
+  .tag { @apply inline-flex items-center border-2 border-black px-1.5 py-0.5 text-[11px] font-bold uppercase leading-none; }
+  .kbd { @apply inline-block border-2 border-black px-1 text-[11px] font-bold leading-4; }
+  .link { @apply text-blue underline underline-offset-2 font-bold; }
+
+  .sr-only-focusable:not(:focus) { @apply sr-only; }
+}
+
+/* Driver.js con estética brutalista */
+.driver-popover.vn-tour {
+  @apply border-2 border-black bg-white text-black rounded-none shadow-brutal font-sans;
+  max-width: 340px;
+}
+.driver-popover.vn-tour .driver-popover-title { font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 900; font-size: 20px; }
+.driver-popover.vn-tour .driver-popover-description { font-weight: 500; font-size: 14px; }
+.driver-popover.vn-tour .driver-popover-footer button {
+  @apply border-2 border-black bg-white text-black rounded-none font-bold px-3 py-1.5 text-sm;
+  text-shadow: none;
+}
+.driver-popover.vn-tour .driver-popover-footer .driver-popover-next-btn { @apply bg-blue text-white; }
+.driver-popover.vn-tour .driver-popover-close-btn { @apply text-black; }
+.driver-popover.vn-tour .driver-popover-progress-text { @apply text-black font-bold; }
+.driver-popover.vn-tour .driver-popover-arrow { display: none; }
+
+.matrix-scroll { scrollbar-color: #000 #fff; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
