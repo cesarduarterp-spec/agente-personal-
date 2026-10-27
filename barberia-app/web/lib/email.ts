@@ -28,7 +28,7 @@ export async function enviarMail(to: string, subject: string, html: string, ics?
   let r = await enviar(true);
   // si Resend rechaza el Reply-To, el mail sale igual (sin él): nunca se pierde una confirmación por eso
   if (!r.ok && replyTo && (r.status === 400 || r.status === 422)) r = await enviar(false);
-  if (!r.ok) console.error("[mail] Resend respondió", r.status);
+  if (!r.ok) console.error("[mail] Resend rechazó el envío:", r.status, (await r.text().catch(() => "")).slice(0, 300));
   return r.ok;
 }
 

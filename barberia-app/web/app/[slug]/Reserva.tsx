@@ -49,7 +49,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
   const [turnstile, setTurnstile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, iniciar] = useTransition();
-  const [hecho, setHecho] = useState<string | null>(null);
+  const [hecho, setHecho] = useState<{ token: string; mailEnviado: boolean } | null>(null);
   const tsEl = useRef<HTMLDivElement>(null);
 
   // el navegador recuerda los datos del cliente para que la próxima reserva sea de un toque
@@ -86,13 +86,19 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
     if (!inicio) return setError("Elegí un horario.");
     if (modalidad === "domicilio" && dir.lat == null) return setError("Elegí tu dirección de la lista para ubicarla en el mapa.");
     iniciar(async () => {
-      const r = await reservar({
-        slug: perfil.slug, barbero, servicio, inicio, modalidad, nombre, apellido, telefono, email,
-        direccion: dir.direccion, lat: dir.lat, lng: dir.lng, indicaciones, consentimiento, turnstile,
-      });
+      let r: Awaited<ReturnType<typeof reservar>>;
+      try {
+        r = await reservar({
+          slug: perfil.slug, barbero, servicio, inicio, modalidad, nombre, apellido, telefono, email,
+          direccion: dir.direccion, lat: dir.lat, lng: dir.lng, indicaciones, consentimiento, turnstile,
+        });
+      } catch {
+        // error de red o del servidor: se muestra un mensaje en vez de tumbar la página
+        r = { ok: false, error: "No pudimos completar tu reserva. Revisá tu conexión y probá de nuevo." };
+      }
       if (r.ok) {
         try { localStorage.setItem(LS, JSON.stringify({ nombre, apellido, telefono, email })); } catch {}
-        setHecho(r.token);
+        setHecho({ token: r.token, mailEnviado: r.mailEnviado });
       } else {
         setError(r.error);
         if (r.error.startsWith("Ese horario")) setVersion((v) => v + 1);
@@ -104,8 +110,14 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-4 py-10">
         <h1 className="text-2xl font-semibold">¡Listo, turno confirmado! ✅</h1>
-        <p>Te enviamos el detalle a <b>{email}</b>. Revisá también el spam.</p>
-        <Link className="underline" href={`/turno/${hecho}`}>Reprogramar o cancelar</Link>
+        {hecho.mailEnviado ? (
+          <p>Te enviamos el detalle a <b>{email}</b>. Revisá también el spam.</p>
+        ) : (
+          <p className="rounded-lg bg-amber-100 p-3 text-amber-900">
+            Tu turno quedó <b>confirmado</b>, pero no pudimos enviarte el mail de confirmación. Guardá el link de abajo: sirve para reprogramar o cancelar.
+          </p>
+        )}
+        <Link className="underline" href={`/turno/${hecho.token}`}>Ver mi turno, reprogramar o cancelar</Link>
       </main>
     );
 
