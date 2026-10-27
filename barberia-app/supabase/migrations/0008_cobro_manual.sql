@@ -16,6 +16,7 @@ begin
     -- null = no tocar; texto vacío = borrar
     precio_texto = case when p_precio_texto is null then precio_texto else nullif(trim(p_precio_texto), '') end,
     instrucciones_pago = case when p_instrucciones is null then instrucciones_pago else nullif(trim(p_instrucciones), '') end
+  where id -- Supabase rechaza UPDATE sin WHERE (pg_safeupdate); la tabla tiene una sola fila (id = true)
   returning * into c;
   return to_jsonb(c);
 end $$;

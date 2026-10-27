@@ -379,3 +379,10 @@ select admin_config(false, null, null, '', '') is not null as config_se_puede_bo
 reset role;
 select precio_texto is null and instrucciones_pago is null as config_borrada from configuracion_cobro;
 \echo === MANUAL-COBRO OK ===
+
+-- 22. admin_config sigue funcionando con el WHERE agregado
+set request.jwt.sub = '99999999-9999-9999-9999-999999999999';
+set role authenticated;
+select (admin_config(false, 30, 7, 'x', 'y') ->> 'dias_prueba')::int = 30 as admin_config_con_where;
+reset role;
+\echo === ARREGLO OK ===

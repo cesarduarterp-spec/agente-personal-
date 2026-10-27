@@ -240,6 +240,7 @@ begin
   if not es_admin() then raise exception 'no_autorizado'; end if;
   update configuracion_cobro set cobro_activo = coalesce(p_cobro_activo, cobro_activo),
     dias_prueba = coalesce(p_dias_prueba, dias_prueba), dias_gracia = coalesce(p_dias_gracia, dias_gracia)
+  where id -- Supabase rechaza UPDATE sin WHERE (pg_safeupdate); la tabla tiene una sola fila (id = true)
   returning * into c;
   return to_jsonb(c);
 end $$;
