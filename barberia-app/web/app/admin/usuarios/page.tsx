@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cargarAdmin, ETIQUETA, type Usuario } from "@/lib/admin";
 import { dinero, fecha } from "@/lib/format";
+import CopiarMails from "./CopiarMails";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,12 @@ export default async function Usuarios({ searchParams }: PageProps<"/admin/usuar
             className={`rounded-full border px-3 py-1 ${f === v ? "border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900" : "border-zinc-300 dark:border-zinc-700"}`}>{t}</Link>
         ))}
       </div>
-      <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{filas.length} resultado(s)</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">{filas.length} resultado(s)</p>
+        <CopiarMails mails={filas.map((u) => u.email).filter(Boolean)} />
+        <a className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700"
+          href={`/admin/usuarios/exportar?${new URLSearchParams({ ...(q ? { q } : {}), ...(f ? { f } : {}) })}`}>Descargar planilla (CSV)</a>
+      </div>
 
       <ul className="mt-2 flex flex-col gap-2">
         {filas.map((u) => (
