@@ -201,7 +201,7 @@ export default function Reserva({ perfil, dias }: { perfil: Perfil; dias: Dia[] 
           <input required type="email" autoComplete="email" placeholder="Mail (te llega la confirmación)" value={email} onChange={(e) => setEmail(e.target.value)} className={campo} />
           <label className="flex items-start gap-2 text-sm">
             <input required type="checkbox" className="mt-1" checked={consentimiento} onChange={(e) => setConsentimiento(e.target.checked)} />
-            Acepto que el barbero guarde mis datos (y fotos de mis cortes) para su historial.
+            Acepto que el barbero guarde mis datos (y fotos de mis cortes) para su historial. <Link href="/privacidad" target="_blank" className="underline">Política de privacidad</Link>
           </label>
         </section>
 
