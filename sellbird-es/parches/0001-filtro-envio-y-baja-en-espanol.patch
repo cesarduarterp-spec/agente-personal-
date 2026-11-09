@@ -1,0 +1,95 @@
+From 32e9b5d5d18e2adaf6df862ab5f71f948bf53f8e Mon Sep 17 00:00:00 2001
+From: Sellbird ES <es@example.com>
+Date: Mon, 9 Nov 2026 02:15:14 +0000
+Subject: [PATCH] Spanish banned phrases in the send gate; accept natural
+ Spanish opt-out lines
+
+---
+ sellbird/config.py         |  2 +-
+ sellbird/gate.py           | 13 +++++++++++++
+ tests/test_spanish_gate.py | 36 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 50 insertions(+), 1 deletion(-)
+ create mode 100644 tests/test_spanish_gate.py
+
+diff --git a/sellbird/config.py b/sellbird/config.py
+index a980d86..7262bd9 100644
+--- a/sellbird/config.py
++++ b/sellbird/config.py
+@@ -467,7 +467,7 @@ _SAYS_IT_STOPS_RE = re.compile(
+ _SAYS_IT_STOPS_HE_RE = re.compile(
+     r"(?:הסר|להסיר|הסירו|הסרה|נסיר|לא,?\s+תודה|להפסיק|אפסיק|תורידו|לא\s+אפנה|לא\s+אכתוב|לא\s+אשלח)")
+ _SAYS_IT_STOPS_ES_RE = re.compile(
+-    r"(?:\bbaja\b|no,?\s+gracias|dejar[ée]?\s+de|dejo\s+de|no\s+(?:le|te|les)\s+(?:escribir|volver|molestar)"
++    r"(?:\bbaja\b|no,?\s+gracias|dejar[ée]?\s+de|dejo\s+de|no\s+(?:le|te|les)\s+(?:escribir|escribo|volver|vuelvo|molestar|molesto)"
+     r"|no\s+volver[ée]|eliminar|quitar|\bparar\b)",
+     re.IGNORECASE)
+ # "Click" in Hebrew: a footer has no link to click.
+diff --git a/sellbird/gate.py b/sellbird/gate.py
+index ca6c399..6e891e9 100644
+--- a/sellbird/gate.py
++++ b/sellbird/gate.py
+@@ -25,6 +25,19 @@ BANNED_PHRASES = (
+     "cutting-edge solution", "revolutionize your", "unlock your",
+     "supercharge your", "as an ai", "i'm an ai", "i am an ai",
+     "as a language model",
++    # Spanish: the same spam triggers and AI tells, so an email the Writer
++    # drafts in Spanish gets the same deterministic check as one in English.
++    # Matched as typed, accents included; each also listed without them.
++    "haga clic aquí", "haga clic aqui", "haz clic aquí", "haz clic aqui",
++    "tiempo limitado", "oferta exclusiva", "oferta especial",
++    "actúe ahora", "actue ahora", "compre ahora", "compra ahora",
++    "sin compromiso", "100% gratis", "gane dinero", "duplique sus",
++    "resultados garantizados", "felicidades",
++    "espero que se encuentre bien", "espero que te encuentres bien",
++    "espero que este correo", "en el mundo actual", "en la era digital",
++    "al siguiente nivel", "y si le dijera", "y si te dijera",
++    "como inteligencia artificial", "como modelo de lenguaje",
++    "soy una ia", "soy una inteligencia artificial",
+ )
+ 
+ MAX_SUBJECT_LEN = 90
+diff --git a/tests/test_spanish_gate.py b/tests/test_spanish_gate.py
+new file mode 100644
+index 0000000..65ae7a8
+--- /dev/null
++++ b/tests/test_spanish_gate.py
+@@ -0,0 +1,36 @@
++"""Spanish drafts get the same deterministic checks as English ones."""
++
++import pytest
++
++from sellbird.config import ComplianceConfig
++from sellbird.gate import pre_send_check
++
++
++@pytest.mark.parametrize("phrase", [
++    "Haga clic aquí para ver más",
++    "Es una oferta por tiempo limitado",
++    "Espero que se encuentre bien.",
++    "Llevamos su marca al siguiente nivel",
++])
++def test_spanish_banned_phrases_block(phrase):
++    result = pre_send_check(
++        "laura@clinica.example", "anuncios y citas",
++        f"Hola Laura,\n\n{phrase}. ¿Quién contesta hoy esos mensajes?")
++    assert not result.ok
++    assert any("banned phrases" in r for r in result.reasons)
++
++
++def test_plain_spanish_email_passes():
++    body = ("Hola Laura,\n\nVi que su clínica tiene anuncios activos en Instagram, "
++            "pero para agendar hay que escribir por WhatsApp.\n\n"
++            "¿Hoy quién contesta esos mensajes?")
++    assert pre_send_check("laura@clinica.example", "anuncios y citas", body).ok
++
++
++@pytest.mark.parametrize("line", [
++    "¿No le interesa? Respóndame y no le vuelvo a escribir.",
++    "¿No le interesa? Respóndame y no le volveré a escribir.",
++    "Si no quiere más correos, dígamelo y no le molesto más.",
++])
++def test_natural_spanish_opt_out_lines_accepted(line):
++    assert ComplianceConfig(opt_out_line=line).opt_out_line == line
+-- 
+2.43.0
+

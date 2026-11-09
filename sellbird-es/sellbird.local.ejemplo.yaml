@@ -1,0 +1,94 @@
+# Ejemplo de sellbird.local.yaml para una agencia de social media en LATAM.
+# Datos ficticios: reemplaza todo lo que esté entre <>.
+# Copia este archivo a tu carpeta de Sellbird como sellbird.local.yaml
+# (si ya corriste `sellbird train`, fusiona estas secciones con el tuyo).
+
+persona:
+  name: "<Tu nombre>"
+  company: "<Nombre de tu agencia>"
+  role: "Estrategia de redes sociales"
+  email: "<tu@dominio-de-envio.example>"     # dominio SECUNDARIO, nunca el principal
+  tone: "cercano, profesional y directo; trato de usted en el primer contacto"
+
+product:
+  name: "<Nombre del servicio>"
+  description: >-
+    Gestión de redes sociales y anuncios en Meta para negocios locales que
+    quieren convertir seguidores en citas, reservas o ventas.
+  pricing: "<Desde USD X al mes>"
+  key_benefits:
+    - "Contenido y anuncios pensados para generar citas, no solo likes"
+    - "Reporte mensual con clientes conseguidos, no con métricas de vanidad"
+    - "Respuesta a mensajes y comentarios para que ningún interesado se enfríe"
+  objection_responses:
+    "muy caro": "Tiene sentido cuidar el presupuesto. ¿Cuánto le cuesta hoy conseguir un cliente nuevo?"
+    "ya tenemos agencia": "Qué bueno. ¿Hay algo que le gustaría que funcionara mejor?"
+    "no me interesa": "Entendido, gracias por responder."
+  offer:
+    primary: "<Plan mensual de gestión de redes>"
+    entry: "Auditoría de sus redes y anuncios en 20 minutos"
+    goal: "book_call"
+    booking_method: "calendar_link"
+    booking_url: "<https://cal.example/tu-agencia/20min>"
+    meeting_duration: "20 minutos"
+    meeting_owner: "<Tu nombre>"
+
+icp:
+  industries:
+    - "Clínicas dentales"
+    - "Clínicas estéticas"
+    - "Restaurantes"
+    - "Gimnasios"
+    - "Inmobiliarias"
+  company_size: "1-50 empleados"
+  titles:
+    - "Dueño"
+    - "Propietario"
+    - "Director general"
+    - "Gerente"
+    - "Fundador"
+  geography:
+    - "México"
+    - "Colombia"
+  hiring_signals:
+    - "community manager"
+    - "social media"
+    - "marketing digital"
+
+channels:
+  email:
+    enabled: true
+    provider: "gmail"
+    max_daily_sends: 30          # empieza bajo; súbelo cuando el warmup lo permita
+    require_approval: true       # NO actives autopilot hasta revisar varios lotes
+    link_domains: ["<tu-sitio-principal.example>"]
+    send_to_risky: false
+    warmup:
+      start_date: "<AAAA-MM-DD>"
+      min_days: 14
+      start_sends: 5
+      daily_increase: 3
+    send_window:
+      start: "09:00"
+      end: "17:00"
+      recipient_timezone: true
+
+usage:
+  max_daily_claude_percent: 60   # deja margen para tu propio trabajo
+  heartbeat_interval_minutes: 15
+  quiet_hours:
+    start: "21:00"
+    end: "07:00"
+    timezone: "America/Mexico_City"   # o America/Bogota, America/Lima, etc.
+
+compliance:
+  postal_address: "<Dirección física de la agencia>"
+  # Sellbird valida que esta línea diga que los correos pueden parar.
+  # "no le vuelvo a escribir" solo pasa con el parche 0001; esta versión pasa sin él:
+  opt_out_line: "¿No le interesa? Respóndame y no le volveré a escribir."
+  do_not_contact:
+    - "<clientes-actuales.example>"
+    - "<competidor.example>"
+
+writer:
+  email_rules: "skills/email_rules.md"   # reglas de redacción en español del kit
