@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-white text-black font-sans antialiased; font-weight: 500; }
+  h1, h2, h3, .font-display { font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 900; letter-spacing: -0.02em; }
+  *:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+  ::selection { background: #FFE600; color: #000; }
+  input, textarea, select { @apply bg-white text-black; }
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 border-2 border-black bg-white px-3 py-2 text-sm font-bold leading-none rounded-sm select-none min-h-[40px] transition-transform; }
+  .btn:hover:not(:disabled) { @apply bg-yellow; }
+  .btn:active:not(:disabled) { transform: translate(2px, 2px); }
+  .btn:disabled { @apply cursor-not-allowed line-through; opacity: 1; }
+  .btn-primary { @apply bg-blue text-white border-blue; }
+  .btn-primary:hover:not(:disabled) { @apply bg-black border-black text-white; }
+  .btn-dark { @apply bg-black text-white; }
+  .btn-dark:hover:not(:disabled) { @apply bg-yellow text-black; }
+  .btn-danger { @apply bg-white text-red border-red; }
+  .btn-danger:hover:not(:disabled) { @apply bg-red text-white; }
+  .btn-icon { @apply px-2 min-w-[40px]; }
+  .input { @apply w-full border-2 border-black rounded-sm px-3 py-2 text-base min-h-[44px]; }
+  .input[aria-invalid='true'] { @apply border-red; border-width: 3px; }
+  .label { @apply block text-sm font-bold mb-1; }
+  .err { @apply mt-1 text-sm font-bold text-red; }
+  .card { @apply border-2 border-black bg-white rounded-sm; }
+  .chip { @apply inline-flex items-center gap-1 border-2 border-black px-2 py-0.5 text-xs font-bold rounded-sm; }
+  .hl { background: linear-gradient(transparent 55%, #FFE600 55%); }
+  .skeleton { @apply bg-white border-2 border-black; background-image: repeating-linear-gradient(-45deg, #000 0 2px, transparent 2px 10px); animation: sk 1s linear infinite; background-size: 28px 28px; }
+  @keyframes sk { to { background-position: 28px 0; } }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* driver.js – versión brutalista */
+.driver-popover.vn-tour { border: 2px solid #000; border-radius: 2px; box-shadow: 4px 4px 0 #000; font-family: Inter, sans-serif; color: #000; background: #fff; }
+.driver-popover.vn-tour .driver-popover-title { font-family: 'Space Grotesk', sans-serif; font-weight: 900; font-size: 20px; }
+.driver-popover.vn-tour .driver-popover-footer button { border: 2px solid #000; border-radius: 2px; text-shadow: none; font-weight: 700; background: #fff; color: #000; padding: 6px 10px; }
+.driver-popover.vn-tour .driver-popover-footer button:hover { background: #FFE600; }
+.driver-popover.vn-tour .driver-popover-arrow { display: none; }
